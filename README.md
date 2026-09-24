@@ -58,6 +58,10 @@ git push -u origin main
 
 打开仓库的 **Actions** 标签页 → 点最新的 `Build Android APK` → 等它变绿 ✅
 
+> 构建用的是 GitHub 托管 runner **自带的 Android SDK**，不需要你安装任何东西。
+> （也不要改成加 `android-actions/setup-android`：官方文档说明它是给自托管 runner 用的，
+> 旧版本还依赖已弃用的 Node 20，会让构建在第一步就失败。）
+
 ### 3. 下载安装包
 
 在构建页面底部 **Artifacts** 区域下载 `工时记-APK`（一个 zip），解压后有两个 apk：
@@ -195,3 +199,28 @@ src/
 ---
 
 MIT License
+
+---
+
+## 自检与验证
+
+项目自带可重复运行的验证脚本（都在 `scripts/`）：
+
+| 命令 | 作用 |
+|---|---|
+| `npm run check` | 工资引擎 53 项断言（含用户给的「10 小时 × 20 元 = 200」） |
+| `npm run typecheck` | TypeScript 严格模式类型检查 |
+| `npm run build` | 生产构建 |
+| `npm run icons:generate` | 重新生成图标与启动画面到 `assets/android/` |
+| `npm run icons:apply` | 把 `assets/android/` 装进 Android 工程（CI 会跑） |
+| `node scripts/visual-check.mjs` | 无头浏览器跑一遍核心流程并截图 |
+| `node scripts/interact-check.mjs` | 抽屉拖拽/甩动关闭 + 无障碍检查 |
+
+> `visual-check` / `interact-check` 需要先 `npm run build && npm run preview`，
+> 并额外装一次 `npm install --no-save playwright`。
+
+### 关键不变量
+
+工资明细**按天四舍五入到分，再累加**，所以每天的金额加起来
+正好等于月度合计，不会出现「明细和合计差一分钱」。
+这条不变量由 `npm run check` 的第 7 组断言守着。
