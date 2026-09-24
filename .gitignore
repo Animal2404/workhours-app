@@ -3,9 +3,11 @@ node_modules/
 dist/
 dist-ssr/
 
-# Android 平台由 CI 用 `npx cap add android` 现场生成，不入库
-android/
-ios/
+# Android 平台由 CI 用 `npx cap add android` 现场生成，不入库。
+# 开头的 / 很重要：只忽略仓库根下的 android/，
+# 否则 assets/android/（要提交的图标资产）会被一起忽略掉。
+/android/
+/ios/
 
 # Capacitor 生成的资源
 .capacitor/
