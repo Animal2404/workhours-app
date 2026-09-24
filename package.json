@@ -1,0 +1,35 @@
+{
+  "name": "workhours-app",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "工时记 — 记录工时、自动算工资、日历视图的圆角风手机 App",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "typecheck": "tsc --noEmit",
+    "check": "node scripts/check-pay.mjs",
+    "verify": "npm run check && npm run typecheck && npm run build",
+    "cap:add": "cap add android",
+    "cap:sync": "cap sync android",
+    "android:open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "lucide": "^0.469.0",
+    "morphicons": "latest",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.0.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}

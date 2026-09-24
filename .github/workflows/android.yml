@@ -1,0 +1,159 @@
+name: Build Android APK
+
+# 云端编译：不用在本地装 Android SDK，推送到 GitHub 就自动出安装包。
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      build_release:
+        description: '同时构建 release 包（需要配置签名 secrets，未配置则用临时签名）'
+        type: boolean
+        default: true
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: 构建 APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: 安装 JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: 配置 Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装依赖
+        run: npm install --no-audit --no-fund
+
+      - name: 类型检查
+        run: npm run typecheck
+
+      - name: 构建前端（Vite）
+        run: npm run build
+
+      - name: 添加 Android 平台
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: 生成应用图标
+        run: |
+          # 用 @capacitor/assets 从 SVG 生成各密度图标；失败不影响构建
+          npm install --no-save @capacitor/assets || true
+          npx capacitor-assets generate --android || echo "图标生成跳过，使用默认图标"
+
+      - name: 缓存 Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: 构建 Debug APK（自动签名，可直接安装）
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: 准备签名（release）
+        id: signing
+        run: |
+          set -e
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+            echo "has_keystore=true" >> "$GITHUB_OUTPUT"
+            echo "✅ 使用仓库配置的正式签名"
+          else
+            # 没配置 secrets 就用临时签名，保证 release 包也能装
+            keytool -genkeypair -v \
+              -keystore android/app/release.keystore \
+              -alias workhours \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass workhours -keypass workhours \
+              -dname "CN=WorkHours, OU=App, O=WorkHours, L=CN, S=CN, C=CN"
+            echo "has_keystore=true" >> "$GITHUB_OUTPUT"
+            echo "⚠️ 使用临时签名（如需正式签名，请配置 ANDROID_KEYSTORE_BASE64 等 secrets）"
+          fi
+
+      - name: 注入 release 签名配置
+        run: |
+          # 用定点插入而不是追加第二个 android {} 块：
+          # 追加依赖 Gradle 的块合并语义，不可靠；这里直接改原块。
+          sed -i '0,/^android {/s//android {\n    signingConfigs {\n        ci {\n            storeFile file("release.keystore")\n            storePassword System.getenv("CI_STORE_PASSWORD") ?: "workhours"\n            keyAlias System.getenv("CI_KEY_ALIAS") ?: "workhours"\n            keyPassword System.getenv("CI_KEY_PASSWORD") ?: "workhours"\n        }\n    }/' android/app/build.gradle
+
+          sed -i '0,/^        release {/s//        release {\n            signingConfig signingConfigs.ci/' android/app/build.gradle
+
+          echo "--- 注入结果 ---"
+          head -14 android/app/build.gradle
+          grep -n "signingConfig signingConfigs.ci" android/app/build.gradle
+
+          # 大括号必须配平，否则 Gradle 直接语法报错
+          node -e "
+            const s=require('fs').readFileSync('android/app/build.gradle','utf8');
+            let d=0; for(const c of s){ if(c==='{')d++; if(c==='}')d--; }
+            if(d!==0){ console.error('build.gradle 大括号不配平: '+d); process.exit(1); }
+            console.log('build.gradle 结构校验通过（大括号配平）');
+          " || python3 -c "
+          s=open('android/app/build.gradle').read()
+          d=0
+          for c in s:
+              if c=='{': d+=1
+              if c=='}': d-=1
+          assert d==0, 'build.gradle 大括号不配平: %d' % d
+          print('build.gradle 结构校验通过（大括号配平）')
+          "
+
+      - name: 构建 Release APK
+        working-directory: android
+        env:
+          CI_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'workhours' }}
+          CI_KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'workhours' }}
+          CI_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'workhours' }}
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: 整理产物
+        run: |
+          mkdir -p out
+          find android/app/build/outputs/apk -name "*.apk" -exec cp {} out/ \;
+          ls -lh out/
+          # 统一命名，方便下载
+          for f in out/*debug*.apk; do [ -e "$f" ] && mv "$f" out/工时记-debug.apk; done
+          for f in out/*release*.apk; do [ -e "$f" ] && mv "$f" out/工时记-release.apk; done
+          ls -lh out/ || true
+
+      - name: 上传 APK（构建产物）
+        uses: actions/upload-artifact@v4
+        with:
+          name: 工时记-APK
+          path: out/*.apk
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: 附加到 Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*.apk

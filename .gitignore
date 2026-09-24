@@ -1,0 +1,40 @@
+# 依赖与构建产物
+node_modules/
+dist/
+dist-ssr/
+
+# Android 平台由 CI 用 `npx cap add android` 现场生成，不入库
+android/
+ios/
+
+# Capacitor 生成的资源
+.capacitor/
+
+# 签名文件绝不能进仓库
+*.jks
+*.keystore
+release.keystore
+
+# 本地环境
+.env
+.env.local
+.env.*.local
+
+# 验证脚本产出的截图（本地核对用）
+shots/
+.tmp/
+
+# 编辑器与系统
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.log
+npm-debug.log*
+
+# 其它
+out/
+coverage/
+*.tsbuildinfo

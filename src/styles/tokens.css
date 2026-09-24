@@ -1,0 +1,276 @@
+/* ============================================================
+   工时记 · 设计令牌（Design Tokens）
+   圆角设计语言：大圆角卡片 / 胶囊按钮 / 柔和阴影 / 克制的层次
+   ============================================================ */
+
+:root {
+  /* ---------- 圆角尺度（整套 UI 的地基） ---------- */
+  --r-xs: 10px;
+  --r-sm: 14px;
+  --r-md: 18px;
+  --r-lg: 24px;
+  --r-xl: 30px;
+  --r-2xl: 38px;
+  --r-full: 999px;
+
+  /* ---------- 间距 ---------- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+
+  /* ---------- 动效曲线（自定义曲线，不用内置的弱曲线） ---------- */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* ---------- 动效时长 ---------- */
+  --t-press: 130ms;
+  --t-fast: 180ms;
+  --t-base: 220ms;
+  --t-slow: 320ms;
+
+  /* ---------- 字体 ---------- */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI',
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+  --font-num: ui-rounded, -apple-system, 'SF Pro Rounded', 'Segoe UI Variable',
+    system-ui, sans-serif;
+
+  /* ---------- 布局 ---------- */
+  --tabbar-h: 64px;
+  --page-pad: 18px;
+}
+
+/* ============================================================
+   浅色主题（默认）
+   ============================================================ */
+:root,
+[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #f4f4f7;
+  --bg-deep: #ebebf0;
+  --surface: #ffffff;
+  --surface-2: #fafafc;
+  --surface-sunken: #f0f0f4;
+
+  --text: #101014;
+  --text-2: #5c5c6b;
+  --text-3: #91919f;
+
+  --line: rgba(16, 16, 20, 0.08);
+  --line-strong: rgba(16, 16, 20, 0.14);
+
+  /* 主色：电光紫罗兰 → 蓝，钱与工时的视觉锚点 */
+  --brand: #6d5efc;
+  --brand-2: #4f8dff;
+  --brand-soft: rgba(109, 94, 252, 0.1);
+  --brand-soft-2: rgba(109, 94, 252, 0.18);
+  --on-brand: #ffffff;
+
+  /* 语义色 */
+  --money: #10b981; /* 工资 / 正收益 */
+  --money-soft: rgba(16, 185, 129, 0.12);
+  --warn: #f59e0b; /* 加班 */
+  --warn-soft: rgba(245, 158, 11, 0.14);
+  --danger: #ef4444; /* 扣款 */
+  --danger-soft: rgba(239, 68, 68, 0.12);
+
+  /* 材质（毛玻璃） */
+  --material: rgba(255, 255, 255, 0.72);
+  --material-strong: rgba(255, 255, 255, 0.86);
+  --material-blur: saturate(180%) blur(20px);
+  --scrim: rgba(16, 16, 20, 0.32);
+
+  /* 阴影：多层柔和，不脏 */
+  --shadow-sm: 0 1px 2px rgba(16, 16, 20, 0.06), 0 1px 1px rgba(16, 16, 20, 0.04);
+  --shadow-md: 0 4px 14px rgba(16, 16, 20, 0.07), 0 1px 3px rgba(16, 16, 20, 0.05);
+  --shadow-lg: 0 16px 40px rgba(16, 16, 20, 0.11), 0 4px 12px rgba(16, 16, 20, 0.06);
+  --shadow-sheet: 0 -12px 48px rgba(16, 16, 20, 0.16);
+
+  --ring: rgba(109, 94, 252, 0.35);
+}
+
+/* ============================================================
+   深色主题
+   ============================================================ */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0d0d11;
+  --bg-deep: #08080b;
+  --surface: #17171d;
+  --surface-2: #1d1d25;
+  --surface-sunken: #131319;
+
+  --text: #f5f5f7;
+  --text-2: #a1a1ad;
+  --text-3: #6e6e7c;
+
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.16);
+
+  --brand: #8b7cff;
+  --brand-2: #5f9bff;
+  --brand-soft: rgba(139, 124, 255, 0.16);
+  --brand-soft-2: rgba(139, 124, 255, 0.26);
+  --on-brand: #14121f;
+
+  --money: #34d399;
+  --money-soft: rgba(52, 211, 153, 0.16);
+  --warn: #fbbf24;
+  --warn-soft: rgba(251, 191, 36, 0.16);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.16);
+
+  --material: rgba(23, 23, 29, 0.74);
+  --material-strong: rgba(23, 23, 29, 0.9);
+  --material-blur: saturate(160%) blur(22px);
+  --scrim: rgba(0, 0, 0, 0.55);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.55);
+  --shadow-sheet: 0 -12px 48px rgba(0, 0, 0, 0.6);
+
+  --ring: rgba(139, 124, 255, 0.45);
+}
+
+/* ============================================================
+   基础重置
+   ============================================================ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text);
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* 深色/浅色切换要缓，不要突然闪一下 */
+  transition: background-color 260ms ease, color 260ms ease;
+}
+
+#root {
+  min-height: 100dvh;
+  isolation: isolate;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+figure {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+ul,
+ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+a {
+  color: var(--brand);
+  text-decoration: none;
+}
+
+svg {
+  display: block;
+  flex: none;
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+/* 数字一律等宽，金额与时长不会跳动 */
+.num,
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* 无障碍：尊重系统减弱动效设置 —— 保留淡入，去掉位移与弹簧 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 120ms !important;
+    transition-property: opacity, background-color, color, border-color !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 无障碍：降低透明度偏好 —— 材质变实，不要糊 */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --material: rgba(255, 255, 255, 0.97);
+    --material-strong: #ffffff;
+    --material-blur: none;
+  }
+  [data-theme='dark'] {
+    --material: rgba(23, 23, 29, 0.98);
+    --material-strong: #17171d;
+    --material-blur: none;
+  }
+}
+
+/* 无障碍：高对比度偏好 —— 边界画清楚 */
+@media (prefers-contrast: more) {
+  :root {
+    --line: rgba(16, 16, 20, 0.3);
+    --line-strong: rgba(16, 16, 20, 0.5);
+    --text-2: #3d3d4a;
+    --text-3: #55555f;
+  }
+  [data-theme='dark'] {
+    --line: rgba(255, 255, 255, 0.32);
+    --line-strong: rgba(255, 255, 255, 0.55);
+    --text-2: #d0d0d8;
+    --text-3: #a8a8b4;
+  }
+}

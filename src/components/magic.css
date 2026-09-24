@@ -1,0 +1,220 @@
+/* ============================================================
+   Magic UI 风格组件样式
+   ============================================================ */
+
+/* ---------------- MagicCard ---------------- */
+.magic-card {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+/* 跟随指针的光斑：用伪元素画，不改动布局 */
+.magic-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--glow, 0);
+  transition: opacity 260ms ease;
+  background: radial-gradient(
+    180px circle at var(--mx, 50%) var(--my, 50%),
+    var(--brand-soft-2) 0%,
+    transparent 72%
+  );
+}
+
+/* 触屏设备没有 hover，指针离开后要自己收掉光斑 */
+@media (hover: none) {
+  .magic-card::before {
+    transition: opacity 520ms ease;
+  }
+}
+
+/* ---------------- ShineBorder ---------------- */
+.shine-wrap {
+  position: relative;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.shine-ray {
+  position: absolute;
+  inset: -60%;
+  z-index: 0;
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 300deg,
+    var(--brand-2) 340deg,
+    var(--brand) 355deg,
+    transparent 360deg
+  );
+  animation-name: shineSpin;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  opacity: 0.75;
+}
+
+@keyframes shineSpin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.shine-wrap[data-active='false'] .shine-ray {
+  display: none;
+}
+
+.shine-content {
+  position: relative;
+  z-index: 1;
+  border-radius: inherit;
+  /* 内层露出，形成 1.5px 的跑光边 */
+  margin: 1.5px;
+  background: var(--surface);
+}
+
+/* ---------------- BlurFade ---------------- */
+.blur-fade {
+  opacity: 0;
+  transform: translateY(10px);
+  filter: blur(6px);
+  transition: opacity 420ms var(--ease-out), transform 420ms var(--ease-out),
+    filter 420ms var(--ease-out);
+  will-change: opacity, transform;
+}
+
+.blur-fade.is-in {
+  opacity: 1;
+  transform: none;
+  filter: none;
+  will-change: auto;
+}
+
+/* ---------------- 细进度条 ---------------- */
+.bar-track {
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: var(--r-full);
+  background: linear-gradient(90deg, var(--brand), var(--brand-2));
+  transition: width 560ms var(--ease-out);
+}
+
+.bar-fill.is-money {
+  background: linear-gradient(90deg, var(--money), #34d399);
+}
+
+/* ---------------- 周条（本周工时速览） ---------------- */
+.week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
+}
+
+.week-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 0 8px;
+  border-radius: var(--r-md);
+  background: var(--surface-sunken);
+  border: 1.5px solid transparent;
+  transition: transform var(--t-press) var(--ease-out),
+    background-color var(--t-fast) ease, border-color var(--t-fast) ease;
+}
+
+.week-col:active {
+  transform: scale(0.94);
+}
+
+.week-col.is-today {
+  border-color: var(--brand);
+}
+
+.week-col.is-active {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+}
+
+.week-dow {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: 0.02em;
+}
+
+.week-col.is-today .week-dow,
+.week-col.is-active .week-dow {
+  color: var(--brand);
+}
+
+.week-hours {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--text-3);
+}
+
+.week-hours.has-val {
+  color: var(--text);
+}
+
+/* 每天一个小竖条，高度即时长 */
+.week-bar {
+  width: 4px;
+  height: 22px;
+  border-radius: var(--r-full);
+  background: var(--line-strong);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.week-bar-fill {
+  width: 100%;
+  border-radius: var(--r-full);
+  background: linear-gradient(180deg, var(--brand), var(--brand-2));
+  transition: height 460ms var(--ease-out);
+}
+
+/* ---------------- 统计页分段（月/年） ---------------- */
+.mini-seg {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  background: var(--surface-sunken);
+  border-radius: var(--r-full);
+  flex: none;
+}
+
+.mini-seg button {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--r-full);
+  font-size: 13px;
+  font-weight: 620;
+  color: var(--text-3);
+  transition: background-color var(--t-fast) ease, color var(--t-fast) ease,
+    transform var(--t-press) var(--ease-out);
+}
+
+.mini-seg button:active {
+  transform: scale(0.95);
+}
+
+.mini-seg button.is-on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
