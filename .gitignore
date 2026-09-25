@@ -12,10 +12,16 @@ dist-ssr/
 # Capacitor 生成的资源
 .capacitor/
 
-# 签名文件绝不能进仓库
+# 签名文件默认不入库
 *.jks
 *.keystore
 release.keystore
+
+# 例外：signing/workhours.keystore 是刻意提交的「固定调试签名」。
+# 目的：每次 CI 构建都用同一把钥匙签名，新 APK 能直接覆盖安装旧版，
+# 不会因为签名不一致而要求卸载重装（那会清掉本地工时数据）。
+# 注意：它是公开的，所以这个包只能自己装/侧载，不要用于应用商店发布。
+!signing/workhours.keystore
 
 # 本地环境
 .env

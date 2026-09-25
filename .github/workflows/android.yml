@@ -82,58 +82,52 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: 构建 Debug APK（已自动签名，可直接安装）
+      - name: 准备固定签名密钥
+        run: |
+          # signing/workhours.keystore 是提交进仓库的「固定调试签名」。
+          # 为什么必须固定：若每次构建都现场生成一把随机钥匙，新 APK 与手机上
+          # 已装的旧版签名不一致，Android 会拒绝覆盖安装，只能卸载重装 ——
+          # 那会清空用户本地的工时数据。
+          # 若配置了 secrets，则优先使用你自己的正式签名。
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+            echo "✅ 使用仓库配置的正式签名"
+            echo "CI_STORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
+            echo "CI_KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> "$GITHUB_ENV"
+            echo "CI_KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> "$GITHUB_ENV"
+          else
+            cp signing/workhours.keystore android/app/release.keystore
+            echo "✅ 使用仓库内固定签名（覆盖安装不会丢数据）"
+            echo "CI_STORE_PASSWORD=workhours" >> "$GITHUB_ENV"
+            echo "CI_KEY_ALIAS=workhours" >> "$GITHUB_ENV"
+            echo "CI_KEY_PASSWORD=workhours" >> "$GITHUB_ENV"
+          fi
+
+      - name: 注入签名配置
+        run: |
+          # 用脚本注入，不用 sed：
+          # 签名块里有引号、`?:`、括号，shell 逐层转义极易出错，
+          # 而 Groovy 少一个引号就会让整个构建失败。
+          python3 scripts/inject-signing.py
+
+      - name: 构建 Debug APK
         working-directory: android
         run: |
           chmod +x ./gradlew
           ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: 准备签名密钥
-        run: |
-          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
-            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
-            echo "✅ 使用仓库配置的正式签名"
-          else
-            # 没配置 secrets 就现场生成一把，保证 release 包也能装
-            keytool -genkeypair -v \
-              -keystore android/app/release.keystore \
-              -alias workhours \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -storepass workhours -keypass workhours \
-              -dname "CN=WorkHours, OU=App, O=WorkHours, L=CN, S=CN, C=CN"
-            echo "⚠️ 使用临时签名（如需正式签名，配置 ANDROID_KEYSTORE_BASE64 等 secrets）"
-          fi
-
-      - name: 注入 release 签名配置
-        run: |
-          # 用定点插入而不是追加第二个 android {} 块：
-          # 追加依赖 Gradle 的块合并语义，不可靠；这里直接改原块。
-          sed -i '0,/^android {/s//android {\n    signingConfigs {\n        ci {\n            storeFile file("release.keystore")\n            storePassword System.getenv("CI_STORE_PASSWORD") ?: "workhours"\n            keyAlias System.getenv("CI_KEY_ALIAS") ?: "workhours"\n            keyPassword System.getenv("CI_KEY_PASSWORD") ?: "workhours"\n        }\n    }/' android/app/build.gradle
-
-          sed -i '0,/^        release {/s//        release {\n            signingConfig signingConfigs.ci/' android/app/build.gradle
-
-          echo "--- 注入后的 build.gradle ---"
-          head -16 android/app/build.gradle
-          grep -n "signingConfig signingConfigs.ci" android/app/build.gradle
-
-          # 大括号必须配平，否则 Gradle 直接语法报错
-          python3 - <<'PY'
-          s = open('android/app/build.gradle').read()
-          d = 0
-          for c in s:
-              if c == '{': d += 1
-              if c == '}': d -= 1
-          assert d == 0, 'build.gradle 大括号不配平: %d' % d
-          print('build.gradle 结构校验通过（大括号配平）')
-          PY
-
       - name: 构建 Release APK
         working-directory: android
-        env:
-          CI_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          CI_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          CI_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: 校验 APK 签名一致（升级安装的前提）
+        run: |
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort | tail -1)
+          echo "apksigner: $APKSIGNER"
+          for apk in $(find android/app/build/outputs/apk -name "*.apk"); do
+            echo "--- $apk ---"
+            "$APKSIGNER" verify --print-certs "$apk" | grep -i "certificate DN\|SHA-256 digest" | head -4
+          done
 
       - name: 整理产物
         run: |
