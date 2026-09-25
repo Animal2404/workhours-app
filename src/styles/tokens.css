@@ -92,6 +92,18 @@
   --shadow-lg: 0 16px 40px rgba(16, 16, 20, 0.11), 0 4px 12px rgba(16, 16, 20, 0.06);
   --shadow-sheet: 0 -12px 48px rgba(16, 16, 20, 0.16);
 
+  /* 英雄卡（本月已赚）：浅色下保留品牌渐变，与深色共用同一组变量 */
+  --hero-bg: linear-gradient(135deg, #6d5efc 0%, #4f8dff 100%);
+  --hero-fg: #ffffff;
+  --hero-line: rgba(255, 255, 255, 0.24);
+  --hero-glow: rgba(255, 255, 255, 0.3);
+  --hero-accent: #ffffff;
+
+  /* 日历「工时拉满」 */
+  --day-full-bg: linear-gradient(140deg, #6d5efc 0%, #4f8dff 100%);
+  --day-full-fg: #ffffff;
+  --day-full-shadow: 0 6px 14px -6px rgba(109, 94, 252, 0.38);
+
   --ring: rgba(109, 94, 252, 0.35);
 }
 
@@ -101,43 +113,58 @@
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --bg: #0d0d11;
-  --bg-deep: #08080b;
-  --surface: #17171d;
-  --surface-2: #1d1d25;
-  --surface-sunken: #131319;
+  /* 大面积中性石墨灰，底色不带蓝紫偏移（蓝紫在暗环境最刺眼） */
+  --bg: #101012;
+  --bg-deep: #0a0a0b;
+  --surface: #1a1a1d;
+  --surface-2: #202024;
+  --surface-sunken: #161619;
 
-  --text: #f5f5f7;
-  --text-2: #a1a1ad;
-  --text-3: #6e6e7c;
+  --text: #f3f3f4;
+  --text-2: #a7a7ae;
+  --text-3: #70707a;
 
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.16);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.14);
 
-  --brand: #8b7cff;
-  --brand-2: #5f9bff;
-  --brand-soft: rgba(139, 124, 255, 0.16);
-  --brand-soft-2: rgba(139, 124, 255, 0.26);
-  --on-brand: #14121f;
+  /* 主色：暖金（蓝光成分低，夜里不刺眼） */
+  --brand: #d9a441;
+  --brand-2: #c2862f;
+  --brand-soft: rgba(217, 164, 65, 0.13);
+  --brand-soft-2: rgba(217, 164, 65, 0.22);
+  --on-brand: #1c1408;
 
-  --money: #34d399;
-  --money-soft: rgba(52, 211, 153, 0.16);
-  --warn: #fbbf24;
-  --warn-soft: rgba(251, 191, 36, 0.16);
-  --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.16);
+  /* 语义色整体降饱和，避免在暗底上「发光」 */
+  --money: #56c98a;
+  --money-soft: rgba(86, 201, 138, 0.14);
+  --warn: #e0864a;
+  --warn-soft: rgba(224, 134, 74, 0.16);
+  --danger: #e06a6a;
+  --danger-soft: rgba(224, 106, 106, 0.15);
 
-  --material: rgba(23, 23, 29, 0.74);
-  --material-strong: rgba(23, 23, 29, 0.9);
-  --material-blur: saturate(160%) blur(22px);
-  --scrim: rgba(0, 0, 0, 0.55);
+  --material: rgba(26, 26, 29, 0.78);
+  --material-strong: rgba(26, 26, 29, 0.93);
+  --material-blur: saturate(150%) blur(22px);
+  --scrim: rgba(0, 0, 0, 0.58);
+
+  /* 英雄卡：深色中性面 + 极淡暖调，取代大块饱和渐变 */
+  --hero-bg: linear-gradient(150deg, #272119 0%, #1d1c1e 58%, #191a1d 100%);
+  --hero-fg: #f7f2e7;
+  --hero-line: rgba(247, 242, 231, 0.14);
+  --hero-glow: rgba(217, 164, 65, 0.16);
+  --hero-accent: #e8bc63;
+
+  /* 日历「工时拉满」：暗一档的暖金，只在小格子上着色 */
+  --day-full-bg: linear-gradient(140deg, #6f5527 0%, #52401f 100%);
+  --day-full-fg: #ffe6b8;
+  --day-full-shadow: 0 6px 14px -8px rgba(217, 164, 65, 0.35);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
   --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.55);
   --shadow-sheet: 0 -12px 48px rgba(0, 0, 0, 0.6);
 
-  --ring: rgba(139, 124, 255, 0.45);
+  --ring: rgba(217, 164, 65, 0.45);
 }
 
 /* ============================================================

@@ -12,7 +12,8 @@
   margin: 0 auto;
 }
 
-/* 顶部氛围光：极淡的品牌色晕染，让纯色背景不呆板 */
+/* 顶部氛围光：极淡的品牌色晕染，让纯色背景不呆板。
+   深色下强度大幅调低 —— 夜里大面积彩色辉光是主要刺眼源。 */
 .app::before {
   content: '';
   position: fixed;
@@ -29,6 +30,16 @@
     radial-gradient(90% 70% at 92% 6%, var(--money-soft) 0%, transparent 58%);
   opacity: 0.85;
   transition: opacity 260ms ease;
+}
+
+/* 深色：只留一层几乎看不见的中性微光 */
+[data-theme='dark'] .app::before {
+  background: radial-gradient(
+    120% 70% at 50% 0%,
+    rgba(255, 255, 255, 0.035) 0%,
+    transparent 60%
+  );
+  opacity: 1;
 }
 
 .app-main {
@@ -157,15 +168,18 @@
   color: var(--text-3);
 }
 
-/* ---------------- 主数字卡（本月工资） ---------------- */
+/* ---------------- 主数字卡（本月工资） ----------------
+   底色走 --hero-bg：浅色是品牌渐变，深色是中性深面 + 极淡暖调。
+   深色下不再铺满饱和蓝紫，避免夜里大面积刺眼。 */
 .hero-card {
   position: relative;
   border-radius: var(--r-2xl);
   padding: var(--sp-6) var(--sp-5) var(--sp-5);
   overflow: hidden;
-  color: var(--on-brand);
-  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
-  box-shadow: 0 18px 40px -12px var(--brand-soft-2), var(--shadow-md);
+  color: var(--hero-fg);
+  background: var(--hero-bg);
+  box-shadow: var(--shadow-md);
+  transition: background-color 260ms ease;
 }
 
 .hero-card::after {
@@ -174,7 +188,7 @@
   inset: 0;
   background: radial-gradient(
     100% 70% at 88% 4%,
-    rgba(255, 255, 255, 0.3) 0%,
+    var(--hero-glow) 0%,
     transparent 60%
   );
   pointer-events: none;
@@ -214,7 +228,7 @@
   gap: var(--sp-5);
   margin-top: var(--sp-5);
   padding-top: var(--sp-4);
-  border-top: 1px solid rgba(255, 255, 255, 0.24);
+  border-top: 1px solid var(--hero-line);
 }
 
 .hero-meta-item {
@@ -350,20 +364,23 @@
   font-weight: 640;
 }
 
-/* 工时拉满的日子：填充品牌色 */
+/* 工时拉满的日子：小面积着色。
+   底色/前景走变量：浅色是品牌紫蓝，深色是暗一档暖金，
+   暗色下避免一整片日历格全在发光。 */
 .day.is-full {
-  background: linear-gradient(140deg, var(--brand) 0%, var(--brand-2) 100%);
+  background: var(--day-full-bg);
   border-color: transparent;
-  box-shadow: 0 6px 14px -6px var(--brand-soft-2);
+  box-shadow: var(--day-full-shadow);
 }
 
 .day.is-full .day-num {
-  color: #ffffff;
+  color: var(--day-full-fg);
   font-weight: 680;
 }
 
 .day.is-full .day-money {
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--day-full-fg);
+  opacity: 0.85;
 }
 
 /* 今天：描一圈品牌色边。用 :not(.is-full) 保证「有工时」的底色永远优先，
@@ -911,7 +928,9 @@
   z-index: 0;
 }
 
-/* 实时预览：记录抽屉里的大金额 */
+/* 实时预览：记录抽屉里的大金额。
+   深色下不铺彩色渐变，改用中性面板 + 左侧暖色细条，
+   信息层级还在，但不会在暗环境里糊一片光。 */
 .live-preview {
   margin-top: var(--sp-5);
   display: flex;
@@ -925,6 +944,12 @@
     var(--brand-soft) 0%,
     var(--money-soft) 100%
   );
+}
+
+[data-theme='dark'] .live-preview {
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  box-shadow: inset 3px 0 0 var(--brand);
 }
 
 .live-preview .k {

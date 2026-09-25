@@ -213,7 +213,7 @@ export function useThemeEffect(theme: AppState['settings']['theme']) {
       document.documentElement.setAttribute('data-theme', resolved);
       // 让状态栏/地址栏颜色跟着走
       const meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute('content', resolved === 'dark' ? '#0d0d11' : '#f4f4f7');
+      if (meta) meta.setAttribute('content', resolved === 'dark' ? '#101012' : '#f4f4f7');
     };
     apply();
     if (theme !== 'system') return;
