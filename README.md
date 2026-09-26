@@ -32,8 +32,33 @@
 | **连续记录天数** | 记录习惯的连击计数 |
 | **导出备份** | JSON 完整备份（可再导入）、CSV 明细（Excel 直接打开，带 UTF-8 BOM 不乱码） |
 | **深色模式** | 跟随系统 / 手动浅色 / 手动深色 |
+| **节假日标注** | 日历上显示中国法定节假日名（春节/清明/劳动节/端午/中秋/国庆/元旦），调休上班的周末标「班」，含放假安排 |
 
 数据全部存在设备本地（localStorage），**不联网、不上传、不需要登录**。
+
+---
+
+## ⚠️ 节假日数据每年要更新一次
+
+节假日不是算出来的，是**国务院办公厅每年发通知定的**（一般当年 11 月发布次年安排）。
+数据写在 `src/lib/holidays.ts` 的 `YEAR_PLANS` 里，**目前覆盖 2024–2026 三年**。
+
+**表外年份的行为**：`getHoliday()` 返回 `null` → 该日按普通日期显示，
+不显示节日名，也**不会报错、不会显示 undefined**。所以到了 2027 年 1 月 1 日，
+App 不会坏，只是**日历上不再有节假日标注**。
+
+**更新方法**（每年 11 月做一次，约 5 分钟）：
+1. 搜「国务院办公厅关于 20XX 年部分节假日安排的通知」（gov.cn 原文）
+2. 在 `src/lib/holidays.ts` 的 `YEAR_PLANS` 里照着上一年加一段：
+   放假区间写进 `ranges`，调休上班的日子写进 `workdays`
+3. 在 `scripts/check-holidays.mjs` 里补上对应断言
+4. 跑 `npm run check:holidays`，全绿即可
+
+> 想省掉这个手工步骤，可以换成 npm 包
+> [`chinese-days`](https://github.com/vsme/chinese-days)（9.4 KB gzip、MIT、零依赖、
+> 社区用 GitHub Action 跟公告自动更新）。本项目选了内置表：零依赖、数据来自
+> gov.cn 原文逐字转录 + 香港天文台农历表交叉核对，137 项断言锁住。
+> 调研对比见 [docs/research-ui-perf.md](docs/research-ui-perf.md)。
 
 ---
 
@@ -231,19 +256,36 @@ MIT License
 
 | 命令 | 作用 |
 |---|---|
+| `npm run verify` | **一键全跑**：工资 + 节假日 + Android 资源 + 类型 + 构建 |
 | `npm run check` | 工资引擎 53 项断言（含用户给的「10 小时 × 20 元 = 200」） |
+| `npm run check:holidays` | 节假日数据 137 项断言（放假区间 / 调休 / 非法输入 / 遍历 1096 天） |
+| `npm run check:android` | Android 资源自检（XML 合法性 + 深浅背景色与 `tokens.css` 三方一致） |
+| `npm run check:fouc` | 启动白闪回归 14 项（拦掉 React，只验首帧主题） |
+| `npm run check:tabbar` | 底部导航居中（10 种视口/缩放/DPR × 4 tab，全 0.00px） |
+| `npm run check:holiday-ui` | 日历节假日显示 39 项（含三行叠加极限、切月切年闰年） |
 | `npm run typecheck` | TypeScript 严格模式类型检查 |
 | `npm run build` | 生产构建 |
 | `npm run icons:generate` | 重新生成图标与启动画面到 `assets/android/` |
 | `npm run icons:apply` | 把 `assets/android/` 装进 Android 工程（CI 会跑） |
 | `node scripts/visual-check.mjs` | 无头浏览器跑一遍核心流程并截图 |
 | `node scripts/interact-check.mjs` | 抽屉拖拽/甩动关闭 + 无障碍检查 |
+| `node scripts/cal-perf-check.mjs` | 换月性能（节点是否重建、长任务、掉帧） |
+| `node scripts/fcp-ab.mjs` | 首屏 FCP 与 baseline 交替对照（防「优化成退步」） |
+| `node scripts/verify-*.mjs` | 独立验证脚本（节假日 / 日历 / 导航），见 `verification/VERIFY-REPORT.md` |
 
-> `visual-check` / `interact-check` 需要先 `npm run build && npm run preview`，
+> 带浏览器的脚本需要先 `npm run build && npm run preview`，
 > 并额外装一次 `npm install --no-save playwright`。
+> 纯 node 的 `check` / `check:holidays` / `check:android` 不需要浏览器，CI 里也会跑。
 
 ### 关键不变量
 
 工资明细**按天四舍五入到分，再累加**，所以每天的金额加起来
 正好等于月度合计，不会出现「明细和合计差一分钱」。
 这条不变量由 `npm run check` 的第 7 组断言守着。
+
+另外两条同样由脚本守着，改动时别弄坏：
+- **首帧主题**：`index.html` 里那段同步内联脚本必须先于样式执行，
+  且不能改成 `type="module"`（module 是延迟执行，等于没提前）。改了 `check:fouc` 会红。
+- **日格溢出判定**：不能用 `scrollHeight`。选中态的 `.day.is-selected::after`
+  有 `inset:-3px` 外环，会把 `scrollHeight` 撑大 3px 造成假报警；
+  要用「非 `position:absolute` 子元素包围盒 vs 父内容盒」来判。

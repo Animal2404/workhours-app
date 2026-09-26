@@ -308,12 +308,30 @@
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
+  /* 换月时只让网格淡入（key 挂在网格上）。
+     刻意只动 opacity、不加 transform：transform 会给后代创建包含块，
+     抽屉/提示条这类 position:fixed 的元素会被钉住（这个坑踩过一次）。
+     纯 opacity 走合成层，不触发重排，也最省电。 */
+  animation: calIn 180ms var(--ease-out);
+}
+
+@keyframes calIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* 日格：圆角方块 + 轻投影，像一颗颗小按键 */
 .day {
   position: relative;
+  /* 基准保持正方形。
+     节假日名那行需要的额外高度，只在真正塞不下的窄屏才给（见文末媒体查询）——
+     全局加高会把整张日历拉长约 18%，白白拖慢首屏绘制。 */
   aspect-ratio: 1 / 1;
+  max-height: 64px;
   border-radius: var(--r-sm);
   display: flex;
   flex-direction: column;
@@ -350,6 +368,63 @@
   font-variant-numeric: tabular-nums;
   line-height: 1;
   letter-spacing: -0.02em;
+}
+
+/* 节假日名。
+   所有放假日共用这一个类 —— 同位置（日号正下方）、同字号、同颜色、同层级，
+   不会出现「个别节日显示、其余缺失」。
+   颜色走 --holiday：浅色是正红，深色换成降饱和暖红，夜里不刺眼。 */
+.day-holiday {
+  max-width: 100%;
+  font-size: 7.8px;
+  line-height: 1;
+  font-weight: 640;
+  color: var(--holiday);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 调休上班的周末：显示「班」。
+   用克制的灰，不跟节日名抢注意力 —— 它是解释「这天为什么不是红的」，
+   不是节日本身。 */
+.day.is-makeup .day-holiday {
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+/* 工时拉满的日子底色是饱和渐变，节日名要换成能压在上面的前景色 */
+.day.is-full .day-holiday {
+  color: var(--day-full-fg);
+  opacity: 0.9;
+}
+
+/* 窄屏（≤389px）：「日号 + 节日名 + 金额」三行同时出现时，
+   桌面 Chromium 刚好塞得下，Android WebView 字体度量稍不同就会溢出。
+   这里把三行一起收一档，留出 3px 以上余量。
+   只影响带节日的格子，普通格子的日号大小不变。 */
+@media (max-width: 389px) {
+  .day.has-holiday .day-num {
+    font-size: 12.5px;
+  }
+
+  .day.has-holiday .day-money {
+    font-size: 8.5px;
+  }
+
+  .day-holiday {
+    font-size: 7.2px;
+  }
+}
+
+/* 更窄（≤339px，如 320px 的老设备）：格子宽只剩 31px，
+   光收字号仍然不够（三行要 31.5px，正方形内容盒只有 29.1px），
+   这时才把格子本身加高一点。大屏不加，避免无谓地拉长日历。 */
+@media (max-width: 339px) {
+  .day {
+    aspect-ratio: 1 / 1.18;
+  }
 }
 
 /* 有工时的日子：上色 + 投影，一眼看出「这天干了活」 */
@@ -1512,10 +1587,20 @@
   letter-spacing: 0.01em;
 }
 
-/* 会滑动的药丸指示器：on-screen movement → ease-in-out */
+/* 会滑动的药丸指示器：on-screen movement → ease-in-out
+   ------------------------------------------------------------
+   left: 0 是必须的，不是随手写的。
+   药丸的水平位置由 TabBar.tsx 里 JS 量出的 offsetLeft 决定，
+   而 offsetLeft 的原点是「导航栏的 padding edge」；
+   如果不显式给 left，绝对定位元素会退回「静态位置」，
+   也就是内容盒起点 —— 两者正好差一个 padding-left（8px）。
+   结果就是药丸整体右移 8px：在 tab 里看着不居中，
+   落在最后一个 tab 时右边还会溢出导航栏 8px（就是用户说的
+   「右边多出一截」）。显式写 left: 0 让两个基准对齐。 */
 .tab-pill {
   position: absolute;
-  top: 6px;
+  left: 0;
+  top: 0;
   height: 48px;
   border-radius: var(--r-full);
   background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);

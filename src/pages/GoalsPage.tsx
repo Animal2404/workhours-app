@@ -10,7 +10,7 @@ import { summarizeMonth, computeDayPay, currentStreak } from '../lib/pay';
 import { formatHours, formatMoney, monthKeys, monthLabel, toKey } from '../lib/date';
 import { CheckIcon, TrendIcon } from '../components/Icon';
 import { Target } from 'lucide';
-import { AnimatedCircularProgressBar, BlurFade, NumberTicker, ProgressBar } from '../components/magic';
+import { AnimatedCircularProgressBar, BlurFade, LAZY_CARD, NumberTicker, ProgressBar } from '../components/magic';
 import { Empty } from '../components/ui';
 
 export function GoalsPage({
@@ -108,7 +108,7 @@ export function GoalsPage({
 
       {/* 月度工资目标 */}
       {goal > 0 ? (
-        <BlurFade>
+        <BlurFade style={LAZY_CARD}>
           <section className="card">
             <div className="card-title">
               <span>本月工资目标</span>
@@ -155,7 +155,7 @@ export function GoalsPage({
 
       {/* 每日工时目标 */}
       {settings.dailyGoalHours > 0 ? (
-        <BlurFade delay={40}>
+        <BlurFade delay={40} style={LAZY_CARD}>
           <section className="card">
             <div className="card-title">
               <span>每日工时目标</span>
@@ -198,7 +198,7 @@ export function GoalsPage({
       ) : null}
 
       {/* 成就感 */}
-      <BlurFade delay={60}>
+      <BlurFade delay={60} style={LAZY_CARD}>
         <section className="card">
           <div className="card-title">
             <span>这个月</span>

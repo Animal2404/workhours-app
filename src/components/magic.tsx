@@ -7,6 +7,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -19,9 +20,32 @@ const prefersReducedMotion = () =>
   typeof window !== 'undefined' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/**
+ * 长页面里给卡片用的「视口外先不算」样式。
+ *
+ * content-visibility:auto 让不在视口内的卡片**完全跳过**样式计算、
+ * 布局与绘制；手机上一屏只有 ~850px，而统计/目标/设置页都接近 2500px，
+ * 也就是 2/3 的卡片本来就在屏幕外，却要陪着一起算一遍。
+ *
+ * contain-intrinsic-size 用的是 `auto <占位高度>`：
+ * 第一次渲染前按占位高度估算卷动高度，渲染过一次之后就记住真实高度，
+ * 所以只有「首次滚过」那一下可能有一次尺寸修正。
+ * 占位值取的是各页卡片的中位高度（量过）。
+ */
+export const LAZY_CARD: CSSProperties = {
+  contentVisibility: 'auto',
+  containIntrinsicSize: 'auto 220px',
+};
+
 /* ------------------------------------------------------------
    NumberTicker：数字滚动
    打断时从「当前显示值」继续，而不是从头开始（避免跳变）
+
+   性能：滚动过程只写 DOM 文本，不逐帧 setState。
+   900ms 的滚动原本要 50+ 次 render/commit；在统计页/记录抽屉里
+   这些 commit 会和柱状图、抽屉弹簧抢同一帧。
+   文本节点始终只有一个，React 在 render 边界照常接管，
+   所以和原来的呈现完全一致。
    ------------------------------------------------------------ */
 export function NumberTicker({
   value,
@@ -34,19 +58,33 @@ export function NumberTicker({
   duration?: number;
   className?: string;
 }) {
-  const [display, setDisplay] = useState(value);
+  const elRef = useRef<HTMLSpanElement | null>(null);
+  /** 当前真正显示在屏幕上的值（打断时从这里接续） */
   const shownRef = useRef(value);
   const rafRef = useRef(0);
+  /** 动画帧里要用最新的 format，但不能让它进 effect 依赖（否则每次父级重渲都重启动画） */
+  const fmtRef = useRef(format);
+  fmtRef.current = format;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const el = elRef.current;
     const from = shownRef.current;
     const to = value;
 
-    if (prefersReducedMotion() || from === to || !Number.isFinite(to)) {
+    if (!el) {
       shownRef.current = to;
-      setDisplay(to);
       return;
     }
+
+    if (prefersReducedMotion() || from === to || !Number.isFinite(to)) {
+      shownRef.current = to;
+      el.textContent = fmtRef.current(to);
+      return;
+    }
+
+    // 先接回「打断点」再起跑：React 刚把文本刷成新 value，
+    // 这里在 paint 前纠正，避免闪一帧跳变
+    el.textContent = fmtRef.current(from);
 
     const started = performance.now();
     const tick = (now: number) => {
@@ -55,18 +93,20 @@ export function NumberTicker({
       const eased = 1 - Math.pow(1 - p, 3);
       const next = from + (to - from) * eased;
       shownRef.current = next;
-      setDisplay(next);
+      const node = elRef.current;
+      if (node) node.textContent = fmtRef.current(p < 1 ? next : to);
       if (p < 1) rafRef.current = requestAnimationFrame(tick);
-      else {
-        shownRef.current = to;
-        setDisplay(to);
-      }
+      else shownRef.current = to;
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
   }, [value, duration]);
 
-  return <span className={className}>{format(display)}</span>;
+  return (
+    <span ref={elRef} className={className}>
+      {format(value)}
+    </span>
+  );
 }
 
 /* ------------------------------------------------------------
@@ -153,30 +193,44 @@ export function ShineBorder({
 
 /* ------------------------------------------------------------
    BlurFade：入场（模糊 + 上浮）
+
+   性能：进场只切一次 class，不走 setState。
+   原来 setTimeout(16) → setShown(true) 会把整个卡片子树再 render 一遍；
+   统计页 6 张卡就是 6 次白付的全量子树 reconcile。
+   class 加上去的时机与原来完全一致，呈现不变。
+
+   另可选 contentVisibility：长页面里不在视口内的卡片
+   完全不参与样式计算与布局（见各页面调用处的说明）。
    ------------------------------------------------------------ */
 export function BlurFade({
   children,
   delay = 0,
   className = '',
+  style,
 }: {
   children: ReactNode;
   delay?: number;
   className?: string;
+  style?: CSSProperties;
 }) {
-  const [shown, setShown] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
     if (prefersReducedMotion()) {
-      setShown(true);
+      el.classList.add('is-in');
       return;
     }
-    const t = window.setTimeout(() => setShown(true), 16);
+    const t = window.setTimeout(() => el.classList.add('is-in'), 16);
     return () => window.clearTimeout(t);
   }, []);
 
   return (
     <div
-      className={`blur-fade ${shown ? 'is-in' : ''} ${className}`}
-      style={{ transitionDelay: `${delay}ms` }}
+      ref={ref}
+      className={`blur-fade ${className}`}
+      style={{ transitionDelay: `${delay}ms`, ...style }}
     >
       {children}
     </div>

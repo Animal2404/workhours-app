@@ -26,7 +26,7 @@ import {
   MorphingIcon,
   Icon,
 } from '../components/Icon';
-import { ShineBorder } from '../components/magic';
+import { ShineBorder, LAZY_CARD } from '../components/magic';
 import { Segmented, Switch, Empty } from '../components/ui';
 import { Clock } from 'lucide';
 
@@ -200,7 +200,7 @@ export function SettingsPage({ store }: { store: StoreValue }) {
       </ShineBorder>
 
       {/* ---------------- 班次模板 ---------------- */}
-      <section className="card">
+      <section className="card" style={LAZY_CARD}>
         <div className="card-title">
           <span>常用班次</span>
           <button
@@ -292,7 +292,7 @@ export function SettingsPage({ store }: { store: StoreValue }) {
       </section>
 
       {/* ---------------- 外观 ---------------- */}
-      <section className="card">
+      <section className="card" style={LAZY_CARD}>
         <div className="card-title">
           <span>外观</span>
         </div>
@@ -352,7 +352,7 @@ export function SettingsPage({ store }: { store: StoreValue }) {
       </section>
 
       {/* ---------------- 数据 ---------------- */}
-      <section className="card">
+      <section className="card" style={LAZY_CARD}>
         <div className="card-title">
           <span>数据</span>
           <span className="muted">只存在这台设备上</span>
@@ -456,7 +456,7 @@ export function SettingsPage({ store }: { store: StoreValue }) {
       </section>
 
       {/* ---------------- 关于 ---------------- */}
-      <section className="card">
+      <section className="card" style={LAZY_CARD}>
         <div className="set-row">
           <div className="set-row-main">
             <span className="set-icon">

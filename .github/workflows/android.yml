@@ -57,6 +57,9 @@ jobs:
       - name: 工资引擎自检
         run: npm run check
 
+      - name: 节假日数据自检
+        run: npm run check:holidays
+
       - name: Android 资源自检
         run: npm run check:android
 

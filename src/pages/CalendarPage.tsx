@@ -27,6 +27,7 @@ import {
   todayKey,
   weekdayHeaders,
 } from '../lib/date';
+import { getHoliday } from '../lib/holidays';
 import { ChevronLeftIcon, ChevronRightIcon, FlameIcon, MorphingIcon, Plus, X } from '../components/Icon';
 import { BlurFade, MagicCard, NumberTicker, ProgressBar } from '../components/magic';
 import { EntrySheet } from '../components/EntrySheet';
@@ -106,7 +107,7 @@ export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageP
   const isCurrentMonth = view.year === now.getFullYear() && view.month0 === now.getMonth();
 
   return (
-    <div className="page page-enter" key={`${view.year}-${view.month0}`}>
+    <div className="page page-enter">
       {/* ---------------- 顶部 ---------------- */}
       <header className="topbar">
         <div>
@@ -238,7 +239,11 @@ export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageP
             ))}
           </div>
 
-          <div className="cal-grid" role="grid">
+          {/* key 只挂在日历网格上：换月时让网格做一次轻量淡入。
+              以前 key 挂在整个 .page 上，换月会把整页（含顶部工资卡、
+              NumberTicker、所有 BlurFade）全部卸载重挂 —— 整页动画重放、
+              数字重播，滚动位置也丢。现在只有这 42 个格子重挂。 */}
+          <div className="cal-grid" role="grid" key={`${view.year}-${view.month0}`}>
             {cells.map((key, i) => {
               if (!key) return <div key={`b${i}`} className="day is-blank" aria-hidden="true" />;
               const entry = state.entries[key];
@@ -250,12 +255,22 @@ export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageP
                 settings.dailyGoalHours > 0 &&
                 pay!.totalHours >= settings.dailyGoalHours;
               const hasExtra = !!pay && (pay.allowance > 0 || pay.deduction > 0);
+
+              // 节假日标注：所有放假日都显示名字，调休上班日显示「班」。
+              // getHoliday 对未知年份/非法输入返回 null，这里不会出现
+              // undefined / null / 空标签；数据缺失时该日就按普通日期显示。
+              const holiday = getHoliday(key);
+              const isMakeup = holiday?.kind === 'workday';
+              const holidayLabel = holiday && holiday.name ? (isMakeup ? '班' : holiday.name) : null;
+
               const classes = [
                 'day',
                 hasHours ? 'has-hours' : '',
                 isFull ? 'is-full' : '',
                 key === today ? 'is-today' : '',
                 key === selected ? 'is-selected' : '',
+                holidayLabel ? 'has-holiday' : '',
+                isMakeup ? 'is-makeup' : '',
               ]
                 .filter(Boolean)
                 .join(' ');
@@ -265,11 +280,15 @@ export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageP
                   key={key}
                   type="button"
                   className={classes}
+                  data-date={key}
                   onClick={() => openDay(key)}
-                  aria-label={`${dateLabel(key)}${hasHours ? `，${formatHours(pay!.totalHours)}小时，${formatMoney(pay!.net)}元` : '，无记录'}`}
+                  aria-label={`${dateLabel(key)}${
+                    holidayLabel ? `，${isMakeup ? '调休上班' : holiday!.name}` : ''
+                  }${hasHours ? `，${formatHours(pay!.totalHours)}小时，${formatMoney(pay!.net)}元` : '，无记录'}`}
                   aria-current={key === today ? 'date' : undefined}
                 >
                   <span className="day-num">{dayNum}</span>
+                  {holidayLabel ? <span className="day-holiday">{holidayLabel}</span> : null}
                   {hasHours ? (
                     <span className="day-money">
                       {Math.round(pay!.net) >= 1000

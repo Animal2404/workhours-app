@@ -21,7 +21,13 @@ import {
   shiftMonth,
 } from '../lib/date';
 import { ChevronLeftIcon, ChevronRightIcon } from '../components/Icon';
-import { AnimatedCircularProgressBar, BlurFade, NumberTicker, ProgressBar } from '../components/magic';
+import {
+  AnimatedCircularProgressBar,
+  BlurFade,
+  LAZY_CARD,
+  NumberTicker,
+  ProgressBar,
+} from '../components/magic';
 
 type Mode = 'month' | 'year';
 
@@ -121,7 +127,7 @@ export function StatsPage({ state }: { state: AppState }) {
       </div>
 
       {/* 总额 */}
-      <BlurFade>
+      <BlurFade style={LAZY_CARD}>
         <section className="card">
           <div className="card-title">
             <span>实得合计</span>
@@ -178,7 +184,7 @@ export function StatsPage({ state }: { state: AppState }) {
 
       {/* 月度：每日柱状图 */}
       {mode === 'month' ? (
-        <BlurFade delay={40}>
+        <BlurFade delay={40} style={LAZY_CARD}>
           <section className="card">
             <div className="card-title">
               <span>每天工时</span>
@@ -208,7 +214,7 @@ export function StatsPage({ state }: { state: AppState }) {
           </section>
         </BlurFade>
       ) : (
-        <BlurFade delay={40}>
+        <BlurFade delay={40} style={LAZY_CARD}>
           <section className="card">
             <div className="card-title">
               <span>每月收入</span>
@@ -238,7 +244,7 @@ export function StatsPage({ state }: { state: AppState }) {
       {/* 达成率 */}
       {mode === 'month' ? (
         <>
-          <BlurFade delay={60}>
+          <BlurFade delay={60} style={LAZY_CARD}>
             <section className="card">
               <div className="card-title">
                 <span>工资目标</span>
@@ -278,7 +284,7 @@ export function StatsPage({ state }: { state: AppState }) {
             </section>
           </BlurFade>
 
-          <BlurFade delay={80}>
+          <BlurFade delay={80} style={LAZY_CARD}>
             <section className="card">
               <div className="card-title">
                 <span>每日达标率</span>
@@ -300,7 +306,7 @@ export function StatsPage({ state }: { state: AppState }) {
       ) : null}
 
       {/* 收入构成 */}
-      <BlurFade delay={100}>
+      <BlurFade delay={100} style={LAZY_CARD}>
         <section className="card">
           <div className="card-title">
             <span>钱从哪来</span>

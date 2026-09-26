@@ -5,7 +5,7 @@
    当前 tab 的图标用 morphicons 做弹簧变形。
    ============================================================ */
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Calendar, ChartColumn, Target, Settings } from 'lucide';
 import { MorphingIcon } from './Icon';
 
@@ -18,7 +18,7 @@ const TABS: { key: TabKey; label: string; icon: typeof Calendar }[] = [
   { key: 'settings', label: '我的', icon: Settings },
 ];
 
-export function TabBar({
+export const TabBar = memo(function TabBar({
   active,
   onChange,
 }: {
@@ -26,7 +26,7 @@ export function TabBar({
   onChange: (key: TabKey) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const [pill, setPill] = useState({ x: 0, w: 0 });
+  const [pill, setPill] = useState({ x: 0, y: 0, w: 0 });
 
   // 先量再画，避免指示器从 0 位置「飞」过去
   useLayoutEffect(() => {
@@ -36,7 +36,23 @@ export function TabBar({
       const idx = TABS.findIndex((t) => t.key === active);
       const btn = wrap.querySelectorAll<HTMLButtonElement>('.tab')[idx];
       if (!btn) return;
-      setPill({ x: btn.offsetLeft, w: btn.offsetWidth });
+      const barRect = wrap.getBoundingClientRect();
+      const cs = getComputedStyle(wrap);
+      const borderLeft = parseFloat(cs.borderLeftWidth) || 0;
+      const borderTop = parseFloat(cs.borderTopWidth) || 0;
+
+      // 药丸的原点 = 导航栏的 padding edge（.tab-pill 显式写了 left/top: 0），
+      // 所以偏移量也必须从 padding edge 量起 —— 减去 border。
+      // 不能用 offsetLeft：一是它和药丸的静态位置基准不同（差一个 padding-left，
+      // 正好造成 8px 右移，也就是用户看到的「右边多出一截」），
+      // 二是它取整，宽高会丢掉小数（83.25 变 83）。
+      // 横向纵向都用实测量，药丸才会严格贴合当前 tab。
+      const btnRect = btn.getBoundingClientRect();
+      setPill({
+        x: btnRect.left - (barRect.left + borderLeft),
+        y: btnRect.top - (barRect.top + borderTop),
+        w: btnRect.width,
+      });
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -61,7 +77,7 @@ export function TabBar({
       <span
         className="tab-pill"
         aria-hidden="true"
-        style={{ transform: `translateX(${pill.x}px)`, width: pill.w }}
+        style={{ transform: `translate(${pill.x}px, ${pill.y}px)`, width: pill.w }}
       />
       {TABS.map((t) => {
         const on = t.key === active;
@@ -85,4 +101,4 @@ export function TabBar({
       })}
     </nav>
   );
-}
+});

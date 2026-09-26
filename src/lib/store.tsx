@@ -119,21 +119,76 @@ export interface StoreValue {
 
 const StoreContext = createContext<StoreValue | null>(null);
 
+/**
+ * 落盘合并窗口（ms）。
+ * 状态连着变是常态：设置页每敲一个数字、步进器连点都会 dispatch。
+ * 每次都同步 JSON.stringify + localStorage.setItem 的话，
+ * 数据量一上来（上千条）每个按键都要几十毫秒——手机上就是可感的卡顿。
+ * 这里把窗口内的多次变更合并成一次写入：
+ * 第一次变更后最多等这么久，期间的变更只更新「待写快照」，
+ * 所以数据新鲜度的最坏情况也就是这个窗口（不是「永远不写」）。
+ */
+const SAVE_COALESCE_MS = 300;
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, undefined, loadState);
   const [storageFailed, setStorageFailed] = useState(false);
   const firstRun = useRef(true);
 
-  // 持久化：状态一变就存（本地、同步、无网络）
+  /** 还没落盘的最新快照；null 表示没有待写内容 */
+  const pendingRef = useRef<AppState | null>(null);
+  const timerRef = useRef(0);
+
+  /** 立刻把待写快照落盘（卸载 / 页面隐藏时用，保证不丢数据） */
+  const flush = useCallback((reportFailure: boolean) => {
+    if (timerRef.current) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = 0;
+    }
+    const next = pendingRef.current;
+    if (!next) return;
+    pendingRef.current = null;
+    const ok = saveState(next);
+    // 值没变就不 setState，省掉一次无意义的整树重渲
+    if (reportFailure) setStorageFailed((prev) => (prev === !ok ? prev : !ok));
+  }, []);
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+
+  // 持久化：合并写入（本地、同步、无网络）
   useEffect(() => {
     if (firstRun.current) {
       // 首次挂载不需要回写，避免把默认值覆盖到已有数据上出问题
       firstRun.current = false;
       return;
     }
-    const ok = saveState(state);
-    setStorageFailed(!ok);
+    pendingRef.current = state;
+    if (timerRef.current) return; // 这一批已经排好了队，只更新快照
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = 0;
+      flushRef.current(true);
+    }, SAVE_COALESCE_MS);
   }, [state]);
+
+  /*
+    兜底：下面这些时机必须把还没写的内容落盘，
+    否则「改完立刻切后台被回收」就会丢最后一次修改。
+    切后台（visibilitychange→hidden）时页面还活着，写入失败照样要提示用户；
+    真正卸载时才静默（那时再 setState 也没人看了）。
+  */
+  useEffect(() => {
+    const onPageHide = () => flushRef.current(true);
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flushRef.current(true);
+    };
+    window.addEventListener('pagehide', onPageHide);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      document.removeEventListener('visibilitychange', onVisibility);
+      flushRef.current(false); // 卸载（热重载 / 根组件销毁）也要落地
+    };
+  }, []);
 
   const upsert = useCallback((entry: DayEntry) => dispatch({ type: 'upsert', entry }), []);
   const remove = useCallback((date: string) => dispatch({ type: 'remove', date }), []);
