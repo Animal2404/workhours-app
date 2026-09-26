@@ -57,6 +57,9 @@ jobs:
       - name: 工资引擎自检
         run: npm run check
 
+      - name: Android 资源自检
+        run: npm run check:android
+
       - name: 类型检查
         run: npm run typecheck
 

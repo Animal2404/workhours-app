@@ -2,12 +2,72 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      /* ============================================================
+         首帧之前就把主题定下来 —— 否则会「白闪一下」
+         ------------------------------------------------------------
+         原来的顺序是错的：
+           1. HTML 先按 :root（浅色）画出来
+           2. React 挂载后，useThemeEffect（useEffect）才把 data-theme
+              改成 dark
+         于是深色模式下会先看到一个浅色画面再跳成深色，就是那道白闪。
+
+         这里把「读设置 + 判定系统偏好 + 写 data-theme」提前到
+         样式生效之前同步执行，第一帧就是正确颜色。
+
+         注意：必须是同步的普通 script，不能是 type="module"
+         （module 是延迟执行的，等于没提前）。
+         ============================================================ */
+      (function () {
+        try {
+          var STORAGE_KEY = 'workhours.state.v1';
+          var mode = 'system';
+
+          // 读用户设置（和 src/lib/storage.ts 里的键保持一致）
+          try {
+            var raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+              var parsed = JSON.parse(raw);
+              var t = parsed && parsed.settings && parsed.settings.theme;
+              if (t === 'light' || t === 'dark' || t === 'system') mode = t;
+            }
+          } catch (e) {
+            /* 存储读不到（隐私模式等）就按系统走 */
+          }
+
+          var prefersDark =
+            window.matchMedia &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+          var resolved = mode === 'system' ? (prefersDark ? 'dark' : 'light') : mode;
+
+          var el = document.documentElement;
+          el.setAttribute('data-theme', resolved);
+          // color-scheme 让浏览器原生控件（滚动条、输入框）也跟着走
+          el.style.colorScheme = resolved;
+          // 兜底：内置样式表还没到时，先别让画布是白的
+          el.style.backgroundColor = resolved === 'dark' ? '#101012' : '#f4f4f7';
+
+          // 主题色 meta：JS 已经算出最终主题，就把所有 theme-color 的
+          // media 条件去掉并统一成该颜色（否则只会改到第一个、且受 media 限制）
+          var color = resolved === 'dark' ? '#101012' : '#f4f4f7';
+          var metas = document.querySelectorAll('meta[name="theme-color"]');
+          for (var i = 0; i < metas.length; i++) {
+            metas[i].removeAttribute('media');
+            metas[i].setAttribute('content', color);
+          }
+        } catch (e) {
+          /* 任何意外都不要让页面白屏 */
+        }
+      })();
+    </script>
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <meta name="theme-color" content="#f4f4f7" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#101012" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
     <meta name="description" content="工时记 — 记录每天工时，自动算出工资，日历一目了然。" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

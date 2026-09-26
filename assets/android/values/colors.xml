@@ -3,4 +3,8 @@
     <color name="colorPrimary">#6D5EFC</color>
     <color name="colorPrimaryDark">#4F46E5</color>
     <color name="colorAccent">#4F8DFF</color>
+    <!-- App 背景色，需与 tokens.css 里 bg 变量的浅色值一致 -->
+    <color name="app_background">#F4F4F7</color>
+    <!-- 闪屏底色，需与 drawable/splash.png 的底色一致 -->
+    <color name="splash_background">#6D5EFC</color>
 </resources>

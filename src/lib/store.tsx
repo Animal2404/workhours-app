@@ -210,10 +210,23 @@ export function useThemeEffect(theme: AppState['settings']['theme']) {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const apply = () => {
       const resolved = theme === 'system' ? (mq.matches ? 'dark' : 'light') : theme;
-      document.documentElement.setAttribute('data-theme', resolved);
-      // 让状态栏/地址栏颜色跟着走
-      const meta = document.querySelector('meta[name="theme-color"]');
-      if (meta) meta.setAttribute('content', resolved === 'dark' ? '#101012' : '#f4f4f7');
+      const el = document.documentElement;
+      el.setAttribute('data-theme', resolved);
+      el.style.colorScheme = resolved;
+
+      const color = resolved === 'dark' ? '#101012' : '#f4f4f7';
+      // 首帧的兜底背景色写在 html 的行内样式上，
+      // 这里必须跟着一起更新，否则用户手动换主题后会残留旧底色。
+      el.style.backgroundColor = color;
+
+      // 让状态栏/地址栏颜色也跟着走：
+      // index.html 里为了「无 JS 时也能对」，放了带 media 的两条 meta；
+      // JS 已经算出最终主题了，就把 media 去掉并统一成该颜色。
+      const metas = document.querySelectorAll('meta[name="theme-color"]');
+      metas.forEach((m) => {
+        m.removeAttribute('media');
+        m.setAttribute('content', color);
+      });
     };
     apply();
     if (theme !== 'system') return;

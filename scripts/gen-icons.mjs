@@ -127,26 +127,42 @@ await writeFile(
   'utf8',
 );
 
-/* 启动画面的主题样式：让闪屏就是品牌色，而不是白屏一闪 */
+/* 启动画面的主题样式 + 窗口背景色
+   ------------------------------------------------------------
+   为什么需要这些：
+   1. 启动瞬间如果窗口背景是白的，深色模式用户会先看到一道白闪。
+      把 windowBackground 设成 App 背景色，并用 values-night/
+      提供深色版本，系统深色模式下窗口本身就是深色，不会闪白。
+   2. Android 12+ 的系统闪屏用 windowSplashScreenBackground，
+      不设的话会退回到主题默认色（很可能是白的）。
+      这里显式设成品牌色，和 drawable/splash.png 的底保持一致。 */
 await writeFile(
   join(outRoot, 'values', 'styles.xml'),
   `<?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- 基础主题 -->
+    <!-- 基础主题：保持 Capacitor 原生模板的 parent，不动它 -->
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
     </style>
 
+    <!-- 主界面主题：在模板原样基础上，只用 android:windowBackground 补上窗口底色。
+         窗口底色走 @color/app_background，它带 values-night 深色版，
+         所以系统深色模式下窗口本身就是深色 —— WebView 画出第一帧之前
+         不会漏出白底（那道白闪的其中一层来源）。
+         parent 保持 DayNight，values-night 才会生效。 -->
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <item name="android:windowBackground">@color/app_background</item>
     </style>
 
-    <!-- 启动画面：品牌色底 + 居中 logo，配合 drawable/splash.png -->
+    <!-- 启动画面：品牌色底 + 居中 logo（drawable/splash.png）
+         保持 Capacitor 模板原样 —— 闪屏本来就是品牌色，
+         不是这次「白闪」的成因，不动它可少一份编译风险。 -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
     </style>
@@ -155,7 +171,9 @@ await writeFile(
   'utf8',
 );
 
-/* 状态栏/主题色也跟着品牌走 */
+/* 品牌色资源（浅色）
+   注意：XML 注释里不能出现连续两个减号，所以这里描述变量名时
+   写「tokens.css 的 bg 变量」而不是带连字符的写法。 */
 await writeFile(
   join(outRoot, 'values', 'colors.xml'),
   `<?xml version="1.0" encoding="utf-8"?>
@@ -163,14 +181,37 @@ await writeFile(
     <color name="colorPrimary">${BRAND}</color>
     <color name="colorPrimaryDark">#4F46E5</color>
     <color name="colorAccent">#4F8DFF</color>
+    <!-- App 背景色，需与 tokens.css 里 bg 变量的浅色值一致 -->
+    <color name="app_background">#F4F4F7</color>
+    <!-- 闪屏底色，需与 drawable/splash.png 的底色一致 -->
+    <color name="splash_background">${BRAND}</color>
+</resources>
+`,
+  'utf8',
+);
+
+/* 深色版：系统深色模式下 Android 会自动选用 values-night，
+   窗口背景跟着变深，WebView 出第一帧之前就不会漏白。
+   注意 splash_background 在深浅两套里都保持品牌色 ——
+   闪屏用的 drawable/splash.png 本身就是品牌紫底，
+   这里若改成深色，Android 12+（走 windowSplashScreenBackground）
+   和 Android 11 及以下（走 splash.png）会显示成两个样子。 */
+await mkdir(join(outRoot, 'values-night'), { recursive: true });
+await writeFile(
+  join(outRoot, 'values-night', 'colors.xml'),
+  `<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App 背景色（深色），需与 tokens.css 里 bg 变量的深色值一致 -->
+    <color name="app_background">#101012</color>
 </resources>
 `,
   'utf8',
 );
 
 console.log('\n  ✓ values/ic_launcher_background.xml  → 品牌底色');
-console.log('  ✓ values/styles.xml                  → 启动画面主题');
-console.log('  ✓ values/colors.xml                  → 主题色');
+console.log('  ✓ values/styles.xml                  → 启动画面 + 窗口背景主题');
+console.log('  ✓ values/colors.xml                  → 主题色 + 窗口/闪屏底色');
+console.log('  ✓ values-night/colors.xml            → 深色窗口/闪屏底色');
 
 await browser.close();
 console.log(`\n✅ 全部生成到 ${outRoot}`);

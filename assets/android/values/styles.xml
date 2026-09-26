@@ -1,20 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- 基础主题 -->
+    <!-- 基础主题：保持 Capacitor 原生模板的 parent，不动它 -->
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorAccent">@color/colorAccent</item>
     </style>
 
+    <!-- 主界面主题：在模板原样基础上，只用 android:windowBackground 补上窗口底色。
+         窗口底色走 @color/app_background，它带 values-night 深色版，
+         所以系统深色模式下窗口本身就是深色 —— WebView 画出第一帧之前
+         不会漏出白底（那道白闪的其中一层来源）。
+         parent 保持 DayNight，values-night 才会生效。 -->
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <item name="android:windowBackground">@color/app_background</item>
     </style>
 
-    <!-- 启动画面：品牌色底 + 居中 logo，配合 drawable/splash.png -->
+    <!-- 启动画面：品牌色底 + 居中 logo（drawable/splash.png）
+         保持 Capacitor 模板原样 —— 闪屏本来就是品牌色，
+         不是这次「白闪」的成因，不动它可少一份编译风险。 -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
     </style>
