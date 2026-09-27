@@ -349,6 +349,59 @@ console.log('\n[6] isRestDay 语义');
 }
 
 /* ---------------- 7. 非法输入安全返回 ---------------- */
+console.log('\n[6b] 官方未公布年份（2027–2030）：只标节日当天');
+{
+  // 国务院每年 11 月才发次年放假安排，所以「2027 放几天、哪天调休」现在
+  // 无人知道。这里只标节日日期（由香港天文台历表推导，方法已用
+  // 2024–2026 官方数据反向验证，见 scripts/derive-festivals.mjs），
+  // kind='festival'，不假装知道放假区间。
+  const wd = (k) => {
+    const [y, m, d] = k.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  };
+  const KNOWN = [
+    ['2027-01-01', '元旦'],
+    ['2027-02-06', '春节'],
+    ['2027-04-05', '清明节'],
+    ['2027-05-01', '劳动节'],
+    ['2027-06-09', '端午节'],
+    ['2027-09-15', '中秋节'],
+    ['2027-10-01', '国庆节'],
+    ['2028-01-26', '春节'],
+    ['2028-10-03', '中秋节'],
+    ['2029-02-13', '春节'],
+    ['2030-09-12', '中秋节'],
+  ];
+  for (const [day, name] of KNOWN) {
+    const g = hol.getHoliday(day);
+    check(`${day} = ${name}`, g && g.name, name);
+    check(`${day} kind = festival`, g && g.kind, 'festival');
+  }
+
+  // 相邻日期不能误标
+  check('2027-02-05 不是节日', hol.getHoliday('2027-02-05'), null);
+  check('2027-09-16 不是节日', hol.getHoliday('2027-09-16'), null);
+  check('2028-01-25 不是节日', hol.getHoliday('2028-01-25'), null);
+
+  // 超出 2030 仍然不猜
+  check('2031-02-20（表外）不猜', hol.getHoliday('2031-02-20'), null);
+  check('2100-01-01（表外）不猜', hol.getHoliday('2100-01-01'), null);
+
+  // 已知的星期，用于下面区分「节日」与「周末」
+  check('2027-09-15 是周三', wd('2027-09-15'), 3);
+  check('2027-02-06 是周六', wd('2027-02-06'), 6);
+
+  // 节日年不声称「哪天放假」：周三的中秋不是休息日
+  check('2027-09-15（周三·中秋）不声称放假', hol.isRestDay('2027-09-15'), false);
+  // 但周末是事实，照常算休息日
+  check('2027-02-06（周六·春节）按周末算休息', hol.isRestDay('2027-02-06'), true);
+
+  // 官方年份不被节日表覆盖，仍以官方放假安排为准
+  check('2026-09-25 仍是官方 holiday', hol.getHoliday('2026-09-25').kind, 'holiday');
+  check('2026-09-26 仍是官方 holiday', hol.getHoliday('2026-09-26').kind, 'holiday');
+  check('2026-09-20 仍是官方 workday', hol.getHoliday('2026-09-20').kind, 'workday');
+}
+
 console.log('\n[7] 非法 / 异常输入');
 {
   const BAD = [
@@ -359,7 +412,7 @@ console.log('\n[7] 非法 / 异常输入');
     '2026-02-30', '2026-02-29', '2026-04-31', '2026-06-31', '0000-00-00',
     '9999-99-99', '２０２６-０９-２５', '__proto__', 'constructor',
     'toString', 'hasOwnProperty', 'NaN', 'undefined', 'null',
-    '1900-01-01', '1999-12-31', '2023-12-31', '2027-01-01', '2030-06-10', '2100-01-01',
+    '1900-01-01', '1999-12-31', '2023-12-31', '2027-01-15', '2030-06-10', '2100-01-01',
     null, undefined, 0, 1, -1, NaN, Infinity, true, false, '', {}, [], [2026, 9, 25],
   ];
 
@@ -495,7 +548,8 @@ console.log('\n[9] 稳定性与无副作用');
 console.log(`\n${'─'.repeat(56)}`);
 if (fails.length === 0) {
   console.log(`✅ 节假日数据自检全部通过：${pass} 项断言`);
-  console.log('   覆盖 2024/2025/2026 三年，共 1096 天');
+  console.log('   官方放假安排：2024/2025/2026 三年，共 1096 天');
+  console.log('   节日日期（无放假安排）：2027–2030，每年 7 个节日');
   console.log('─'.repeat(56));
   process.exit(0);
 } else {

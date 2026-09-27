@@ -328,23 +328,35 @@ console.log('\n[7] 切月、切年、连续快速切月：不残留、不串月'
   check('切到 10 月：2026-10-01 = 国庆节', oct1?.label === '国庆节', `实际 ${JSON.stringify(oct1?.label)}`);
   check('9 月的格子已不在视图里（无残留）', leftover === null);
 
-  // 连续快速切 6 次到 2027-04（超出数据范围）
-  for (let i = 0; i < 6; i++) {
+  // 连续快速往后切，一直切到「两层数据都覆盖不到」的年份（2031+）。
+  // 注意别只切到 2027 —— 2027 现在有「节日日期」层（官方放假安排未公布，
+  // 但节日当天会标出来），已经不是「无数据月份」了。
+  const monthYear = async () => {
+    const m = await page.evaluate(() => document.querySelector('.cal-month')?.textContent ?? '');
+    return Number((m.match(/(\d{4})年/) ?? [])[1] ?? 0);
+  };
+  for (let i = 0; i < 70; i++) {
+    if ((await monthYear()) >= 2031) break;
     await next.click();
-    await page.waitForTimeout(60);
+    await page.waitForTimeout(35);
   }
-  await page.waitForTimeout(400);
-  const labels2027 = await page.evaluate(() => document.querySelectorAll('.day-holiday').length);
-  const month2027 = await page.evaluate(() => document.querySelector('.cal-month')?.textContent ?? '');
+  await page.waitForTimeout(450);
+  const labelsOut = await page.evaluate(() => document.querySelectorAll('.day-holiday').length);
+  const monthOut = await page.evaluate(() => document.querySelector('.cal-month')?.textContent ?? '');
   check('切到无数据月份不报错', errors.length === 0, errors.slice(0, 2).join(' | '));
-  check('无数据月份没有乱标', labels2027 === 0, `标注数 ${labels2027}，月份 ${month2027}`);
+  check('2031 起没有数据、不乱标', labelsOut === 0, `标注数 ${labelsOut}，月份 ${monthOut}`);
 
-  // 连续快切回 2026-09
-  for (let i = 0; i < 7; i++) {
-    await prev.click();
-    await page.waitForTimeout(60);
+  // 连续快切回 2026-09（不再数固定次数，按标题回退）
+  for (let i = 0; i < 80; i++) {
+    const lbl = await page.evaluate(() => document.querySelector('.cal-month')?.textContent ?? '');
+    if (lbl.includes('2026年9月')) break;
+    const y = Number((lbl.match(/(\d{4})年/) ?? [])[1] ?? 0);
+    const mo = Number((lbl.match(/年(\d{1,2})月/) ?? [])[1] ?? 0);
+    if (y < 2026 || (y === 2026 && mo < 9)) await next.click();
+    else await prev.click();
+    await page.waitForTimeout(35);
   }
-  await page.waitForTimeout(420);
+  await page.waitForTimeout(450);
   const back = await cellInfo(page, '2026-09-25');
   check('快切回 9 月仍正确显示中秋节', back?.label === '中秋节', `实际 ${JSON.stringify(back?.label)}`);
 

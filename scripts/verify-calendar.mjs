@@ -211,7 +211,12 @@ console.log('B0. 初始状态');
 console.log('='.repeat(74));
 {
   const lbl = await monthLabelNow();
-  eq('默认打开的是「今天」所在月份（系统今天 2026-09-26）', lbl, '2026年9月');
+  // 用系统当天算，别写死日期 —— 跨零点跑就会误报（曾经因此红过一次）
+  const nowLbl = await page.evaluate(() => {
+    const d = new Date();
+    return `${d.getFullYear()}年${d.getMonth() + 1}月`;
+  });
+  eq(`默认打开的是「今天」所在月份（系统今天 ${nowLbl}）`, lbl, nowLbl);
   const snap = await gridSnapshot();
   console.log(`  格子总数=${snap.total} 日期格=${snap.dayCount} 空格=${snap.blankCount} 行数=${snap.gridRows}`);
   const ls = await page.evaluate(() => ({ n: Object.keys(JSON.parse(localStorage.getItem('workhours.v1') || '{}').entries || {}).length }));
@@ -411,14 +416,23 @@ console.log('\n' + '='.repeat(74));
 console.log('B5. 切月 / 切年 / 连续快速切月：不残留、不串月');
 console.log('='.repeat(74));
 {
-  // 回到今天（当前月）
-  await goToMonth(2026, 8);
+  // 回到今天（当前月）—— 年月与期望值都按系统当天算，不写死日期
+  const nowD = await page.evaluate(() => {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2, '0');
+    return {
+      y: d.getFullYear(),
+      m0: d.getMonth(),
+      key: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
+    };
+  });
+  await goToMonth(nowD.y, nowD.m0);
   const t = await page.evaluate(() => {
     const sel = document.querySelectorAll('.day.is-today');
     return { n: sel.length, date: sel[0]?.getAttribute('data-date') ?? null };
   });
   eq('回到当前月后「今天」格恰好 1 个', t.n, 1);
-  eq('「今天」格 = 2026-09-26', t.date, '2026-09-26');
+  eq(`「今天」格 = ${nowD.key}`, t.date, nowD.key);
 
   // 连续快速切月：点 13 次「下一个月」，几乎不等动画
   const before = await monthLabelNow();

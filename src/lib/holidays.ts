@@ -54,12 +54,22 @@
    也不读取系统时间。上层可以放心在渲染期直接调用。
    ============================================================ */
 
-export type HolidayKind = 'holiday' | 'workday';
+export type HolidayKind = 'holiday' | 'workday' | 'festival';
 
 export interface HolidayInfo {
   /** 节日名（如「春节」），或调休日固定为「调休上班」 */
   name: string;
-  /** 'holiday' = 放假；'workday' = 调休上班的周末 */
+  /**
+   * 'holiday'  = 官方放假日（国务院已公布放假安排）
+   * 'workday'  = 官方调休上班的周末
+   * 'festival' = 官方还没公布放假安排的年份，只标出节日当天
+   *
+   * 为什么要分 'festival'：
+   * 国务院每年 11 月才发次年的放假安排，所以「2027 放几天、哪天调休」
+   * 现在无人知道。但「春节是正月初一」「中秋是八月十五」是农历本身的
+   * 属性，香港天文台早已公布对照表 —— 手机日历显示的正是这个。
+   * 所以这类日子只标节日名，不假装知道放假区间。
+   */
   kind: HolidayKind;
 }
 
@@ -152,6 +162,55 @@ const YEAR_PLANS: Record<number, YearPlan> = {
 /** 调休上班日的固定显示名 */
 const WORKDAY_NAME = '调休上班';
 
+/* ---------------- 只有节日日期、没有放假安排的年份 ----------------
+   来源：香港天文台《公曆與農曆日期對照表》T{year}c.txt
+         https://www.hko.gov.hk/tc/gts/time/calendar/text/files/T2027c.txt
+   推导规则（与手机日历一致，只标节日当天，不猜放假区间）：
+     春节 = 正月初一 ／ 端午 = 五月初一 + 4 ／ 中秋 = 八月初一 + 14
+     清明 = 表上标「清明」那天 ／ 元旦·劳动节·国庆节 = 固定 1/1、5/1、10/1
+
+   这套规则已用 2024–2026 的**官方**数据反过来验证过：
+   春节/端午/中秋 三年六处全部逐日吻合（见 scripts/derive-festivals.mjs）。
+   旧年份若日后官方公布安排，会被上面 YEAR_PLANS 的官方数据覆盖。 */
+const FESTIVALS: Record<number, Record<string, string>> = {
+  2027: {
+    元旦: '2027-01-01',
+    春节: '2027-02-06',
+    清明节: '2027-04-05',
+    劳动节: '2027-05-01',
+    端午节: '2027-06-09',
+    中秋节: '2027-09-15',
+    国庆节: '2027-10-01',
+  },
+  2028: {
+    元旦: '2028-01-01',
+    春节: '2028-01-26',
+    清明节: '2028-04-04',
+    劳动节: '2028-05-01',
+    端午节: '2028-05-28',
+    中秋节: '2028-10-03',
+    国庆节: '2028-10-01',
+  },
+  2029: {
+    元旦: '2029-01-01',
+    春节: '2029-02-13',
+    清明节: '2029-04-04',
+    劳动节: '2029-05-01',
+    端午节: '2029-06-16',
+    中秋节: '2029-09-22',
+    国庆节: '2029-10-01',
+  },
+  2030: {
+    元旦: '2030-01-01',
+    春节: '2030-02-03',
+    清明节: '2030-04-05',
+    劳动节: '2030-05-01',
+    端午节: '2030-06-05',
+    中秋节: '2030-09-12',
+    国庆节: '2030-10-01',
+  },
+};
+
 /* ---------------- 表构建（纯计算，无副作用） ---------------- */
 
 const DAY_MS = 86400000;
@@ -200,6 +259,14 @@ const TABLE: Map<string, HolidayInfo> = (() => {
 
 const COVERED_YEARS: Set<number> = new Set(Object.keys(YEAR_PLANS).map(Number));
 
+/* 只有节日、没有放假安排的年份 */
+const FESTIVAL_TABLE: Map<string, HolidayInfo> = new Map(
+  Object.values(FESTIVALS).flatMap((year) =>
+    Object.entries(year).map(([name, day]) => [day, makeInfo(name, 'festival')] as const),
+  ),
+);
+const FESTIVAL_YEARS: Set<number> = new Set(Object.keys(FESTIVALS).map(Number));
+
 /* ---------------- 输入校验 ---------------- */
 
 const DATE_KEY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -246,13 +313,17 @@ function isWeekend(p: ParsedKey): boolean {
 /**
  * 查这一天是什么日子。
  * @param dateKey 'YYYY-MM-DD'（如 '2026-09-25'）
- * @returns 节假日 / 调休上班信息；不是特殊日子、或超出覆盖年份 → null
+ * @returns 节假日 / 调休上班 / 节日（仅日期）信息；不是特殊日子 → null
  */
 export function getHoliday(dateKey: string): HolidayInfo | null {
   const parsed = parseKey(dateKey);
   if (parsed === null) return null;
-  if (!COVERED_YEARS.has(parsed.y)) return null;
-  return TABLE.get(dateKey) ?? null;
+  // 有官方放假安排的年份：以官方数据为准
+  if (COVERED_YEARS.has(parsed.y)) return TABLE.get(dateKey) ?? null;
+  // 官方还没公布安排的年份：只标节日当天
+  if (FESTIVAL_YEARS.has(parsed.y)) return FESTIVAL_TABLE.get(dateKey) ?? null;
+  // 再往外：没有数据就不猜
+  return null;
 }
 
 /**
@@ -265,14 +336,19 @@ export function holidayName(dateKey: string): string | null {
 }
 
 /**
- * 这天是不是「休息日」：法定放假日，或者周末且没被调休成上班。
- * 覆盖年份之外的日期一律 false——没有数据就不替用户猜。
+ * 这天是不是「休息日」。
+ * - 有官方安排的年份：放假日 → true，调休上班 → false，其余看周末
+ * - 只有节日的年份：不替用户猜「哪天放假」，但周末是事实，照常算休息日
+ * - 再往外：false
  */
 export function isRestDay(dateKey: string): boolean {
   const parsed = parseKey(dateKey);
   if (parsed === null) return false;
-  if (!COVERED_YEARS.has(parsed.y)) return false;
-  const info = TABLE.get(dateKey);
-  if (info !== undefined) return info.kind === 'holiday';
-  return isWeekend(parsed);
+  if (COVERED_YEARS.has(parsed.y)) {
+    const info = TABLE.get(dateKey);
+    if (info !== undefined) return info.kind === 'holiday';
+    return isWeekend(parsed);
+  }
+  if (FESTIVAL_YEARS.has(parsed.y)) return isWeekend(parsed);
+  return false;
 }
