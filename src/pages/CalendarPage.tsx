@@ -27,7 +27,7 @@ import {
   todayKey,
   weekdayHeaders,
 } from '../lib/date';
-import { getHoliday } from '../lib/holidays';
+import { getHoliday, holidayCoverageNote } from '../lib/holidays';
 import { ChevronLeftIcon, ChevronRightIcon, FlameIcon, MorphingIcon, Plus, X } from '../components/Icon';
 import { BlurFade, MagicCard, NumberTicker, ProgressBar } from '../components/magic';
 import { EntrySheet } from '../components/EntrySheet';
@@ -72,6 +72,9 @@ export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageP
     () => weekdayHeaders(settings.weekStartsMonday),
     [settings.weekStartsMonday],
   );
+
+  // 该年节假日数据到什么程度（官方年份返回 null，不显示任何提示）
+  const coverageNote = useMemo(() => holidayCoverageNote(view.year), [view.year]);
 
   const goal = useMemo(
     () => goalProgress(summary, settings.monthlyGoalIncome, view.year, view.month0, now),
@@ -207,6 +210,13 @@ export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageP
             <div className="cal-month">
               {monthLabel(view.year, view.month0)}
               <em>共 {formatHours(summary.totalHours)}h</em>
+              {/* 数据覆盖说明：2027–2030 只有节日日期、没有官方放假安排，
+                  2031 起更没有数据。不说明的话，用户会把节日当天误当成放假日。 */}
+              {coverageNote ? (
+                <em className="cal-note" title="国务院尚未公布该年放假安排">
+                  {coverageNote}
+                </em>
+              ) : null}
             </div>
             <div className="cal-nav">
               <button

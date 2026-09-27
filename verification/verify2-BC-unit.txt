@@ -1,0 +1,107 @@
+================================================================================
+verify2 · B/C 节：holidays.ts 模块契约与边界（测的是编译后的本体）
+================================================================================
+  被测源码: src/lib/holidays.ts  (10561 字符, sha256=06adb9a90cd9046b…)
+  导出: getHoliday, holidayName, isRestDay
+
+【B-模块】官方年份(2024–2026) 与 节日层(2027–2030) 的边界
+--------------------------------------------------------------------------------
+  2026-09-25 (周五)  kind=holiday  name=中秋节    ✓
+  2026-09-26 (周六)  kind=holiday  name=中秋节    ✓
+  2026-09-27 (周日)  kind=holiday  name=中秋节    ✓
+  2026-09-20 (周日)  kind=workday  name=调休上班   ✓
+  2026-09-21 (周一)  kind=null     name=null   ✓
+  2026-02-14 (周六)  kind=workday  name=调休上班   ✓
+  2026-01-04 (周日)  kind=workday  name=调休上班   ✓
+  2026-10-10 (周六)  kind=workday  name=调休上班   ✓
+  2024-02-09 (周五)  kind=null     name=null   ✓
+  2024-02-10 (周六)  kind=holiday  name=春节     ✓
+  2025-01-28 (周二)  kind=holiday  name=春节     ✓
+  2025-10-06 (周一)  kind=holiday  name=中秋节    ✓
+  2027-02-06 (周六)  kind=festival name=春节     ✓
+  2027-09-15 (周三)  kind=festival name=中秋节    ✓
+  2030-12-31 (周二)  kind=null     name=null   ✓
+  2031-01-01 (周三)  kind=null     name=null   ✓
+  2031-02-19 (周三)  kind=null     name=null   ✓
+  2031-09-30 (周二)  kind=null     name=null   ✓
+  2035-10-01 (周一)  kind=null     name=null   ✓
+
+  2024–2026 共 1096 天，kind='festival' 的天数 = 0 ✓ 官方数据未被节日层覆盖
+  2027–2030 共 1461 天，非 festival 标注 = 0 ✓ 未假装知道放假安排
+  2031–2035 共 1826 天，有标注 = 0 ✓ 数据范围外不猜
+
+【C1】isRestDay 在节日年的语义（只按周末算，不声称节日当天放假）
+--------------------------------------------------------------------------------
+  2027:
+    2027-01-01 周五  元旦   isRestDay=false 周末=false ✓
+    2027-02-06 周六  春节   isRestDay=true  周末=true  ✓
+    2027-04-05 周一  清明节  isRestDay=false 周末=false ✓
+    2027-05-01 周六  劳动节  isRestDay=true  周末=true  ✓
+    2027-06-09 周三  端午节  isRestDay=false 周末=false ✓
+    2027-09-15 周三  中秋节  isRestDay=false 周末=false ✓
+    2027-10-01 周五  国庆节  isRestDay=false 周末=false ✓
+  2028:
+    2028-01-01 周六  元旦   isRestDay=true  周末=true  ✓
+    2028-01-26 周三  春节   isRestDay=false 周末=false ✓
+    2028-04-04 周二  清明节  isRestDay=false 周末=false ✓
+    2028-05-01 周一  劳动节  isRestDay=false 周末=false ✓
+    2028-05-28 周日  端午节  isRestDay=true  周末=true  ✓
+    2028-10-03 周二  中秋节  isRestDay=false 周末=false ✓
+    2028-10-01 周日  国庆节  isRestDay=true  周末=true  ✓
+  2029:
+    2029-01-01 周一  元旦   isRestDay=false 周末=false ✓
+    2029-02-13 周二  春节   isRestDay=false 周末=false ✓
+    2029-04-04 周三  清明节  isRestDay=false 周末=false ✓
+    2029-05-01 周二  劳动节  isRestDay=false 周末=false ✓
+    2029-06-16 周六  端午节  isRestDay=true  周末=true  ✓
+    2029-09-22 周六  中秋节  isRestDay=true  周末=true  ✓
+    2029-10-01 周一  国庆节  isRestDay=false 周末=false ✓
+  2030:
+    2030-01-01 周二  元旦   isRestDay=false 周末=false ✓
+    2030-02-03 周日  春节   isRestDay=true  周末=true  ✓
+    2030-04-05 周五  清明节  isRestDay=false 周末=false ✓
+    2030-05-01 周三  劳动节  isRestDay=false 周末=false ✓
+    2030-06-05 周三  端午节  isRestDay=false 周末=false ✓
+    2030-09-12 周四  中秋节  isRestDay=false 周末=false ✓
+    2030-10-01 周二  国庆节  isRestDay=false 周末=false ✓
+  小节：28 个节日里落在周末 8 个、落在工作日 20 个；
+        isRestDay 与「是否周末」28/28 一致 ⇒ 节日年确实**不声称**节日当天放假。
+  点名：2027-09-15(周三)=false  2027-02-06(周六)=true  2027-10-01(周五·国庆)=false
+
+【C2】非法/异常输入：零抛异常、不返回 undefined / 'null' / 空串
+--------------------------------------------------------------------------------
+  28 种非法输入：抛异常 0 次，形状全对 = ✓
+  合法但无数据年份 (1900/2031/2099)：一律 null·null·false ✓
+
+【C3】全量遍历 2024-01-01 ~ 2030-12-31（返回值形状合法性）
+--------------------------------------------------------------------------------
+  遍历天数 = 2557（2024-01-01 ~ 2030-12-31，含 2024/2028 两个闰年）
+  抛异常 = 0  ✓
+  形状非法 = 0 处  ✓（name 非空字符串 / kind 合法 / isFrozen / holidayName 与 name 一致）
+  分类计数：holiday=89  workday=19  festival=28  null=2421
+  逐年标注数：
+    2024: holiday= 28  workday= 8  festival= 0
+    2025: holiday= 28  workday= 5  festival= 0
+    2026: holiday= 33  workday= 6  festival= 0
+    2027: holiday=  0  workday= 0  festival= 7
+    2028: holiday=  0  workday= 0  festival= 7
+    2029: holiday=  0  workday= 0  festival= 7
+    2030: holiday=  0  workday= 0  festival= 7
+  节日名分布：
+    春节 × 29
+    国庆节 × 25
+    调休上班 × 19
+    劳动节 × 19
+    清明节 × 13
+    端午节 × 11
+    中秋节 × 11
+    元旦 × 9
+
+【附加】冻结与副作用
+--------------------------------------------------------------------------------
+  Object.isFrozen(info) = true  改写尝试被拦截 = true  改后仍为 '中秋节' ✓
+  两次调用返回同一冻结实例 = true（设计如此，调用方无法改坏表）
+
+================================================================================
+B/C 节结论：✓ PASS — 116 条断言全部通过
+================================================================================

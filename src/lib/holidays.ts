@@ -170,8 +170,22 @@ const WORKDAY_NAME = '调休上班';
      清明 = 表上标「清明」那天 ／ 元旦·劳动节·国庆节 = 固定 1/1、5/1、10/1
 
    这套规则已用 2024–2026 的**官方**数据反过来验证过：
-   春节/端午/中秋 三年六处全部逐日吻合（见 scripts/derive-festivals.mjs）。
-   旧年份若日后官方公布安排，会被上面 YEAR_PLANS 的官方数据覆盖。 */
+   春节/端午/中秋 三年**九处**全部逐日吻合（见 scripts/derive-festivals.mjs）。
+
+   ⚠️ 两件容易被误判成 bug 的事，先记在这里：
+   1) 闰月：2028 有闰五月（2028-06-23 起）。所以下面解析月首时必须
+      **精确等值**匹配 '五月'，不能用 includes —— 否则 2028 端午会被
+      闰五月劫持，整整错 30 天。
+   2) ICU 假警报：用 `Intl.DateTimeFormat('en-u-ca-chinese')` 复核
+      2027/2030 的春节会得到「差一天」（ICU 给 02-07 / 02-02）。
+      经 Meeus 朔时刻裁定 **ICU 错、本表对**：
+      2027 朔 = 02-06 23:56、2030 朔 = 02-03 00:07（东八区），
+      距日界仅 4 分钟 / 7 分钟，ICU 的次级误差被放大成整天。
+      佐证：Meeus 与香港天文台在 2024–2030 全部 87 个月首 87/87 一致。
+      **不要因为 ICU 报警就去改这两个日期。**
+
+   另外：某年若日后官方公布了放假安排，会被上面 YEAR_PLANS 的官方数据
+   自动覆盖（COVERED_YEARS 优先于 FESTIVAL_YEARS），无需改动任何逻辑。 */
 const FESTIVALS: Record<number, Record<string, string>> = {
   2027: {
     元旦: '2027-01-01',
@@ -333,6 +347,23 @@ export function getHoliday(dateKey: string): HolidayInfo | null {
 export function holidayName(dateKey: string): string | null {
   const info = getHoliday(dateKey);
   return info === null ? null : info.name;
+}
+
+/** 目前能给出信息的最大年份（官方 + 节日两层取最大） */
+export const MAX_KNOWN_YEAR = Math.max(...[...COVERED_YEARS, ...FESTIVAL_YEARS]);
+
+/**
+ * 这一年的节假日数据「到什么程度」，供界面给个说明。
+ *
+ * 为什么需要它：日历上 2027-02-06 会显示「春节」，但那天**不一定放假** ——
+ * 官方放假安排要等当年 11 月才发布。如果不说明，用户可能误以为那天休息。
+ *
+ * @returns 需要提示时的说明文字；官方年份（信息完整）返回 null
+ */
+export function holidayCoverageNote(year: number): string | null {
+  if (COVERED_YEARS.has(year)) return null;
+  if (FESTIVAL_YEARS.has(year)) return '放假安排未公布';
+  return `数据至 ${MAX_KNOWN_YEAR} 年`;
 }
 
 /**

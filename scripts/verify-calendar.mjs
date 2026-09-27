@@ -63,13 +63,15 @@ await page.waitForTimeout(400);
 
 /* ---------------- 工具 ---------------- */
 async function monthLabelNow() {
-  // .cal-month 里还嵌了一个 <em>共 Xh</em>，innerText 会把两段粘在一起，
-  // 所以只取去掉 <em> 之后的主标题文本。
+  // .cal-month 里除了主标题，还嵌着若干 <em> 注解（「共 Xh」，
+  // 以及数据覆盖提示如「放假安排未公布」/「数据至 2030 年」）。
+  // innerText 会把它们和主标题粘在一起，所以把**所有** <em> 去掉，
+  // 只取主标题文本。（以前只删第一个，页面新增注解后会漏删。）
   return page.evaluate(() => {
     const el = document.querySelector('.cal-month');
     if (!el) return '';
     const c = el.cloneNode(true);
-    c.querySelector('em')?.remove();
+    c.querySelectorAll('em').forEach((e) => e.remove());
     return c.textContent.trim();
   });
 }
@@ -434,7 +436,12 @@ console.log('='.repeat(74));
   eq('回到当前月后「今天」格恰好 1 个', t.n, 1);
   eq(`「今天」格 = ${nowD.key}`, t.date, nowD.key);
 
-  // 连续快速切月：点 13 次「下一个月」，几乎不等动画
+  // 连续快速切月：点 13 次「下一个月」，几乎不等动画。
+  // 这里刻意先回到一个**固定锚点 2026-09**：下面的断言（+13 = 2027年10月、
+  // 31 天、无残留、往回 12 次 = 2026年10月）全都锚在这个月份上。
+  // 必须与「今天」解耦 —— 否则进入 2026-10 之后，13 次会落到 2027-11，
+  // 这几条会集体假红（独立复核 verify2 实测证实过这个坑）。
+  await goToMonth(2026, 8);
   const before = await monthLabelNow();
   for (let i = 0; i < 13; i++) await page.locator('[aria-label="下一个月"]').click();
   await page.waitForTimeout(600);

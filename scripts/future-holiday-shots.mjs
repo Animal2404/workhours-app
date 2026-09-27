@@ -21,7 +21,7 @@ await page.waitForTimeout(400);
 const monthOf = () => page.evaluate(() => document.querySelector('.cal-month')?.textContent ?? '');
 
 async function goTo(year, month) {
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 90; i++) {
     const label = await monthOf();
     const y = Number((label.match(/(\d{4})年/) ?? [])[1] ?? 0);
     const m = Number((label.match(/年(\d{1,2})月/) ?? [])[1] ?? 0);
@@ -36,6 +36,7 @@ async function goTo(year, month) {
 for (const [y, m, tag] of [
   [2027, 2, '2027-02-spring'],
   [2027, 9, '2027-09-midautumn'],
+  [2031, 1, '2031-01-beyond'],
 ]) {
   const okGo = await goTo(y, m);
   await page.waitForTimeout(350);

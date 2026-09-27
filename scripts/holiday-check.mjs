@@ -320,6 +320,21 @@ console.log('\n[7] 切月、切年、连续快速切月：不残留、不串月'
   const next = page.getByLabel('下一个月');
   const prev = page.getByLabel('上一个月');
 
+  // 本组断言全部锚定 2026-09/10，所以先显式跳到锚点。
+  // 不能依赖「App 打开就是 2026-09」—— 那只在今天成立，跨月后会假红。
+  const goTo = async (year, month) => {
+    for (let i = 0; i < 40; i++) {
+      const lbl = await page.evaluate(() => document.querySelector('.cal-month')?.textContent ?? '');
+      const y = Number((lbl.match(/(\d{4})年/) ?? [])[1] ?? 0);
+      const mo = Number((lbl.match(/年(\d{1,2})月/) ?? [])[1] ?? 0);
+      if (y === year && mo === month) return;
+      if (y < year || (y === year && mo < month)) await next.click();
+      else await prev.click();
+      await page.waitForTimeout(40);
+    }
+  };
+  await goTo(2026, 9);
+
   // 到 10 月：应显示国庆节，且不再有中秋标注残留
   await next.click();
   await page.waitForTimeout(320);
@@ -360,14 +375,21 @@ console.log('\n[7] 切月、切年、连续快速切月：不残留、不串月'
   const back = await cellInfo(page, '2026-09-25');
   check('快切回 9 月仍正确显示中秋节', back?.label === '中秋节', `实际 ${JSON.stringify(back?.label)}`);
 
-  // 回到今天
+  // 回到今天：应落在**系统当天所在月份**。
+  // 不能断言「回到今天后能看到 2026-09-25」—— 那只在 2026 年 9 月成立。
   const todayBtn = page.locator('button', { hasText: '回到今天' });
   if (await todayBtn.count()) {
     await todayBtn.first().click();
     await page.waitForTimeout(320);
   }
-  const afterToday = await cellInfo(page, '2026-09-25');
-  check('回到今天后仍正确', afterToday?.label === '中秋节', `实际 ${JSON.stringify(afterToday?.label)}`);
+  const nowMonth = await page.evaluate(() => {
+    const d = new Date();
+    return `${d.getFullYear()}年${d.getMonth() + 1}月`;
+  });
+  const shownMonth = await page.evaluate(
+    () => document.querySelector('.cal-month')?.textContent ?? '',
+  );
+  check(`回到今天落在系统当月（${nowMonth}）`, shownMonth.includes(nowMonth), `实际 ${shownMonth}`);
   await ctx.close();
 }
 
