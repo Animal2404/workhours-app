@@ -1,7 +1,7 @@
 {
   "name": "workhours-app",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "description": "工时记 — 记录工时、自动算工资、日历视图的圆角风手机 App",
   "scripts": {
