@@ -116,16 +116,25 @@ git push -u origin main
 
 > **https://github.com/Animal2404/workhours-app/releases/latest**
 >
-> 点 **`工时记.apk`** 下载即可。这个链接永远是**最新构建**，不用每次回来换。
+> 点 **`WorkHours.apk`** 下载即可。这个链接永远是**最新构建**，不用每次回来换：
+>
+> ```
+> https://github.com/Animal2404/workhours-app/releases/latest/download/WorkHours.apk
+> ```
 
 也可以从构建页面拿（**Artifacts** 区域，保留 90 天）：
 
 | 文件 | 用途 |
 |---|---|
-| `工时记-debug.apk` | 测试用，已自动签名 |
-| `工时记-release.apk` | 正式包，体积更小 |
+| `WorkHours-debug.apk` | 调试用，排查问题时装 |
+| `WorkHours.apk` | 正式包，体积更小 |
 
 传到手机点击安装（需要允许「安装未知来源应用」）。
+
+> ⚠️ **附件名必须是纯英文**。`softprops/action-gh-release` 会把附件名里的
+> 非 ASCII 字符替换成 `-`：中文名「工时记-debug.apk」上传后实际变成
+> 「-debug.apk」。这个坑真踩过（第一次发布的 Release 附件名就是坏的）。
+> Release **标题**里可以随便用中文，只有**文件名**不行。
 
 > **两个包用的是同一把固定签名**，所以**都能直接覆盖安装、本地工时数据不丢**。
 > 只有第一次装（或之前用的是别的签名）才需要先卸载旧版。

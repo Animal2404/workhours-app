@@ -164,9 +164,12 @@ jobs:
         run: |
           mkdir -p out
           find android/app/build/outputs/apk -name "*.apk" -exec cp {} out/ \;
-          # 统一命名，方便下载
-          for f in out/*debug*.apk; do [ -e "$f" ] && mv "$f" "out/工时记-debug.apk"; done
-          for f in out/*release*.apk; do [ -e "$f" ] && mv "$f" "out/工时记-release.apk"; done
+          # 统一命名，方便下载。
+          # ⚠️ 这里**必须用 ASCII**：softprops/action-gh-release 会把附件名里的
+          #    非 ASCII 字符替换成 '-'，中文名「工时记-debug.apk」传到 Release 上
+          #    会变成「-debug.apk」（真的发生过）。Release 标题里可以用中文。
+          for f in out/*debug*.apk; do [ -e "$f" ] && mv "$f" "out/WorkHours-debug.apk"; done
+          for f in out/*release*.apk; do [ -e "$f" ] && mv "$f" "out/WorkHours.apk"; done
           ls -lh out/
 
       - name: 上传 APK（构建产物）
@@ -197,18 +200,25 @@ jobs:
           body: |
             ## 工时记 · 最新构建
 
-            点下面的 **工时记.apk** 下载，传到手机上安装即可。
+            点下面的 **WorkHours.apk** 下载，传到手机上安装即可。
 
             - 版本：**v${{ env.APP_VERSION }}**
             - 提交：`${{ github.sha }}`
             - 构建：${{ github.event.head_commit.timestamp }}
 
             ### 安装说明
-            - **覆盖安装不会丢数据**：本包使用仓库里固定的调试签名，
+            - **覆盖安装不会丢数据**：本包使用仓库里固定的签名，
               可以直接覆盖安装旧版，本地工时记录保留。
             - 如果是第一次装、或之前用的是别的签名，需要先卸载旧版再装。
             - 安装时若提示「未知来源」，在系统设置里允许安装未知应用即可。
 
+            ### 两个包怎么选
+            | 附件 | 说明 |
+            |---|---|
+            | `WorkHours.apk` | **装这个**，正式包，体积更小 |
+            | `WorkHours-debug.apk` | 调试包，排查问题时用 |
+
             每次推送到主分支，这里都会自动重新构建并更新（包括下面的 APK 附件）。
+            下载链接永久有效：`releases/latest/download/WorkHours.apk`
           files: out/*.apk
           fail_on_unmatched_files: true
