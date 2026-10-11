@@ -1,20 +1,39 @@
-﻿工时记 · 云端构建结果（正式交付物）
+﻿工时记 · 交付结果（Releases 已接通）
 =========================================
-最终提交: 2524329
-运行: https://github.com/Animal2404/workhours-app/actions/runs/38111956718
-结论: success（全部步骤通过）
-产物: 工时记-APK  6.33 MB 左右
+版本: v1.1.0   versionCode 10100
 
-本轮新增的 CI 自检步骤（全绿）
+【下载（推荐）】
+https://github.com/Animal2404/workhours-app/releases/latest
+永久直链: https://github.com/Animal2404/workhours-app/releases/latest/download/WorkHours.apk
+  附件: WorkHours.apk         3.04 MB  (正式包，装这个)
+        WorkHours-debug.apk   3.98 MB  (调试包)
+
+【构建】
+运行: https://github.com/Animal2404/workhours-app/actions/runs/38112960682
+提交: 67296f8
+结论: success（26 个步骤全部通过）
+
+【Release 是怎么接通的】
+之前 Releases 页一直是空的。根因是工作流里那步写成了
+  if: github.event_name == 'release'
+意思是「只有被 release 事件触发才跑」，而工作流是 push 触发的 —— 所以从没执行过。
+现改为 if: github.event_name == 'push'，固定 tag=latest 滚动更新同一个 Release。
+
+【版本号已注入 APK 并在 CI 核对】
+从真实 APK 读出来的 manifest：
+  package: name='com.workhours.app' versionCode='10100' versionName='1.1.0'
+CI 会比对 versionName 与 package.json，不一致直接让构建失败
+（免得 Releases 页写的版本和手机「应用信息」里显示的对不上）。
+
+【CI 自检步骤（全绿）】
   工资引擎自检 53 项
-  存款目标 / 累计 / 老数据迁移自检 67 项   <-- 本次新增
+  存款目标 / 累计 / 老数据迁移自检 67 项
+  签名注入脚本自检 20 项（幂等 / versionCode 递增 / 异常输入不写坏文件）
   节假日数据自检 171 项
   Android 资源自检 8 项
-  类型检查 / 构建前端(Vite) / 加 Android 平台 / 装图标 / 同步 / 签名 / Debug+Release APK / 校验签名 / 上传
+  类型检查 / 构建前端 / 加 Android 平台 / 装图标 / 同步 / 签名注入
+  Debug + Release APK / 校验签名一致 / 校验 APK 版本号 / 上传 / 发布 Release
 
-本轮提交
-  81cfaae  批量记账 + 累计收入/逐月明细 + 存款目标 + 修好进度环彩色弧 + 提醒从空壳变真
-  2524329  清理：忽略提交信息草稿文件
-
-说明: 存款目标与累计相关的 67 项断言已进 CI；
-      数据或算钱逻辑改错会在云端构建阶段被拦下，不会产出坏 APK。
+【升级安装】
+两个包用同一把固定签名 → 可直接覆盖安装，本地工时数据不丢。
+只有第一次装（或之前用的别的签名）需要先卸载旧版。
