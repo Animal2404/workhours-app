@@ -364,7 +364,11 @@ export function useThemeEffect(theme: AppState['settings']['theme']) {
       el.setAttribute('data-theme', resolved);
       el.style.colorScheme = resolved;
 
-      const color = resolved === 'dark' ? '#101012' : '#f4f4f7';
+      // ⚠️ 这两个值必须和 tokens.css 的 --bg（浅/深）以及 index.html 的
+      //    首帧内联脚本保持一致 —— 首帧、样式表到位后、Android 窗口底色
+      //    四处是同一件事。check:android 会检 tokens.css ↔ Android 资源，
+      //    check:theme 会检 tokens.css 里的值；改一处就得改全部。
+      const color = resolved === 'dark' ? '#0f0f11' : '#f4f4f7';
       // 首帧的兜底背景色写在 html 的行内样式上，
       // 这里必须跟着一起更新，否则用户手动换主题后会残留旧底色。
       el.style.backgroundColor = color;

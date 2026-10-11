@@ -202,7 +202,7 @@ await writeFile(
   `<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- App 背景色（深色），需与 tokens.css 里 bg 变量的深色值一致 -->
-    <color name="app_background">#101012</color>
+    <color name="app_background">#0F0F11</color>
 </resources>
 `,
   'utf8',

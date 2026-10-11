@@ -336,7 +336,7 @@ export function GoalsPage({
                     borderRadius: 8,
                     border: r.future ? '1.5px dashed var(--line-strong)' : 'none',
                     background: r.hit
-                      ? 'linear-gradient(140deg, var(--money), #34d399)'
+                      ? 'linear-gradient(140deg, var(--money), var(--money-2))'
                       : r.hours > 0
                         ? 'var(--brand-soft)'
                         : 'var(--surface-sunken)',

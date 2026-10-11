@@ -63,6 +63,9 @@ jobs:
       - name: 签名注入脚本自检（含版本号注入）
         run: npm run check:signing
 
+      - name: 主题配色自检（对比度 + 色相纪律 + 首帧底色一致性）
+        run: npm run check:theme
+
       - name: 节假日数据自检
         run: npm run check:holidays
 

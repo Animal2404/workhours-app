@@ -1389,7 +1389,7 @@
 }
 
 .goal-fill.is-done {
-  background: linear-gradient(90deg, var(--money), #34d399);
+  background: linear-gradient(90deg, var(--money), var(--money-2));
 }
 
 .goal-check {
@@ -1742,8 +1742,8 @@
   margin-top: 12px;
   padding: 9px 12px;
   border-radius: var(--r-md);
-  background: rgba(255, 255, 255, 0.14);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: var(--hero-pill);
+  border: 1px solid var(--hero-line);
   color: var(--hero-fg);
   font: inherit;
   text-align: left;
@@ -1774,16 +1774,19 @@
   font-weight: 620;
   padding: 3px 8px;
   border-radius: var(--r-full);
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--hero-pill);
   font-variant-numeric: tabular-nums;
 }
 
+/* 涨/跌用同一色彩家族的两个色调，不再引入对立的薄荷绿。
+   「涨还是跌」首先靠 ↑ / ↓ 箭头传达（color-not-decorative-only：
+   功能不能只靠颜色），颜色只是加强。 */
 .hero-mom.is-up {
-  color: #b8f5cf;
+  color: var(--hero-up);
 }
 
 .hero-mom.is-down {
-  color: #ffd9d0;
+  color: var(--hero-down);
 }
 
 /* ---------- 日历右上角：批量模式开关 ---------- */

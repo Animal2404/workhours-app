@@ -46,11 +46,11 @@
           // color-scheme 让浏览器原生控件（滚动条、输入框）也跟着走
           el.style.colorScheme = resolved;
           // 兜底：内置样式表还没到时，先别让画布是白的
-          el.style.backgroundColor = resolved === 'dark' ? '#101012' : '#f4f4f7';
+          el.style.backgroundColor = resolved === 'dark' ? '#0f0f11' : '#f4f4f7';
 
           // 主题色 meta：JS 已经算出最终主题，就把所有 theme-color 的
           // media 条件去掉并统一成该颜色（否则只会改到第一个、且受 media 限制）
-          var color = resolved === 'dark' ? '#101012' : '#f4f4f7';
+          var color = resolved === 'dark' ? '#0f0f11' : '#f4f4f7';
           var metas = document.querySelectorAll('meta[name="theme-color"]');
           for (var i = 0; i < metas.length; i++) {
             metas[i].removeAttribute('media');
@@ -66,7 +66,7 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <meta name="theme-color" content="#f4f4f7" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#101012" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#0f0f11" media="(prefers-color-scheme: dark)" />
     <meta name="color-scheme" content="light dark" />
     <meta name="description" content="工时记 — 记录每天工时，自动算出工资，日历一目了然。" />
     <meta name="mobile-web-app-capable" content="yes" />

@@ -10,13 +10,45 @@
 
 import { chromium, devices } from 'playwright';
 import { mkdir } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 await mkdir('verification', { recursive: true });
 
 const BASE = process.env.BASE_URL ?? 'http://127.0.0.1:4173/';
 
-const DARK_BG = 'rgb(16, 16, 18)'; // #101012
-const LIGHT_BG = 'rgb(244, 244, 247)'; // #f4f4f7
+/* 期望值**从 tokens.css 里读**，不要写死。
+   写死过一次：tokens.css 的深色 --bg 从 #101012 改成 #0f0f11 后，
+   这里还断言 rgb(16,16,18)，于是 4 项全红 —— 但产品其实是对的，
+   红的是测试自己。测试应该跟着真值走，而不是抄一份常量。 */
+function readTokens() {
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+  const css = readFileSync(join(root, 'src/styles/tokens.css'), 'utf-8');
+  const grab = (selector, name) => {
+    const i = css.indexOf(selector);
+    const seg = css.slice(i, css.indexOf('}', css.indexOf('{', i)));
+    const m = new RegExp(`${name}\\s*:\\s*(#[0-9a-fA-F]{3,6})`).exec(seg);
+    if (!m) throw new Error(`tokens.css 里找不到 ${selector} 的 ${name}`);
+    return m[1];
+  };
+  return {
+    dark: grab("[data-theme='dark']", '--bg'),
+    light: grab("[data-theme='light']", '--bg'),
+  };
+}
+
+const hexToRgbStr = (hex) => {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+  return `rgb(${r}, ${g}, ${b})`;
+};
+
+const TOKENS = readTokens();
+const DARK_BG = hexToRgbStr(TOKENS.dark);
+const LIGHT_BG = hexToRgbStr(TOKENS.light);
+console.log(`期望值取自 tokens.css：深色 ${TOKENS.dark} → ${DARK_BG}；浅色 ${TOKENS.light} → ${LIGHT_BG}\n`);
 
 let pass = 0;
 let fail = 0;
