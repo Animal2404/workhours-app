@@ -160,11 +160,18 @@ console.log('\n[2] 累计收入与逐月明细');
 
   await goTab('统计');
   await page.locator('.mini-seg button:has-text("全部")').click();
-  await page.waitForTimeout(400);
+  // NumberTicker 是从 0 滚上去的，得等它滚完再读，否则读到中间帧
+  // （曾经截到 ¥705，而 480+320=800，看着像算错了）
+  await page.waitForTimeout(1400);
 
   const sub = await page.locator('.topbar-sub').first().innerText();
   console.log(`     统计页副标题: ${sub.trim()}`);
   check('显示共 2 个月', /2\s*个月/.test(sub), true);
+
+  // 关键：全部合计必须等于逐月之和
+  const totalNum = await page.locator('.card .num').first().innerText();
+  console.log(`     全部实得合计: ${totalNum.trim()}`);
+  check('全部合计 = 800（= 480 + 320）', totalNum.replace(/[^\d.]/g, ''), '800');
 
   const rows = await page.locator('.month-row').count();
   check('逐月明细 2 行', rows, 2);
