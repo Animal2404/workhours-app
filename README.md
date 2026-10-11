@@ -112,16 +112,29 @@ git push -u origin main
 
 ### 3. 下载安装包
 
-在构建页面底部 **Artifacts** 区域下载 `工时记-APK`（一个 zip），解压后有两个 apk：
+**推荐：直接去 Releases 页拿**（不用解压、链接永久有效、每次推送自动更新）：
+
+> **https://github.com/Animal2404/workhours-app/releases/latest**
+>
+> 点 **`工时记.apk`** 下载即可。这个链接永远是**最新构建**，不用每次回来换。
+
+也可以从构建页面拿（**Artifacts** 区域，保留 90 天）：
 
 | 文件 | 用途 |
 |---|---|
-| `工时记-debug.apk` | **直接装**，测试用，已自动签名 |
+| `工时记-debug.apk` | 测试用，已自动签名 |
 | `工时记-release.apk` | 正式包，体积更小 |
 
 传到手机点击安装（需要允许「安装未知来源应用」）。
 
-> **建议装 debug 那个**：debug 包用 Android 默认调试签名，安装最省事。
+> **两个包用的是同一把固定签名**，所以**都能直接覆盖安装、本地工时数据不丢**。
+> 只有第一次装（或之前用的是别的签名）才需要先卸载旧版。
+
+> **更新机制**：每次推送到主分支，CI 都会重新构建并**滚动更新同一个 Release**
+> （固定 tag `latest`，所以上面那个链接不会变）。历史版本可在 Actions 的构建产物里取。
+> 版本号取自 `package.json`，构建时会注入进 APK 并在 CI 里核对
+> （`aapt2 dump badging` 读出来的 `versionName` 必须和 `package.json` 一致，
+> 不一致直接让构建失败 —— 免得 Releases 页写的版本和手机「应用信息」里显示的对不上）。
 
 ### 4. 想要正式签名？（可选）
 
@@ -301,6 +314,7 @@ MIT License
 | `npm run verify` | **一键全跑**：工资 + 存款目标 + 节假日 + Android 资源 + 类型 + 构建 |
 | `npm run check` | 工资引擎 53 项断言（含用户给的「10 小时 × 20 元 = 200」） |
 | `npm run check:savings` | 存款目标 / 累计 / 逐月明细 / 老数据迁移 67 项断言 |
+| `npm run check:signing` | 签名与版本号注入脚本 20 项（幂等、versionCode 递增、异常输入不写坏文件） |
 | `npm run check:features` | 批量记账 / 累计 / 存款目标 / 提醒 端到端 43 项（需浏览器） |
 | `npm run check:holidays` | 节假日数据 171 项断言（放假区间 / 调休 / 非法输入 / 遍历 1096 天） |
 | `npm run check:android` | Android 资源自检（XML 合法性 + 深浅背景色与 `tokens.css` 三方一致） |

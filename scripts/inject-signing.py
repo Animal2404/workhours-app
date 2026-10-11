@@ -20,6 +20,15 @@ import re
 import sys
 from pathlib import Path
 
+# Windows 上 Python 的 stdout 默认是系统 ANSI（中文机器上是 GBK），
+# 打不出 ✓ 和中文，直接抛 UnicodeEncodeError 让脚本失败。
+# CI 跑在 ubuntu 上不会有这问题，但本地一跑就莫名挂掉 —— 统一强制 UTF-8。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        pass
+
 PATH = Path("android/app/build.gradle")
 
 if not PATH.exists():
@@ -73,6 +82,36 @@ else:
         )
         print("✓ 已为 debug 指定固定签名")
 
+# ---------- 版本号：从 package.json 注入 ----------
+# 目的：Releases 页写的版本号，和装到手机后在「应用信息」里看到的版本号一致。
+# versionCode 用 major*10000 + minor*100 + patch，保证只增不减。
+import json
+
+PKG = Path("package.json")
+VERSION = "1.0.0"
+if PKG.exists():
+    try:
+        VERSION = str(json.loads(PKG.read_text(encoding="utf-8")).get("version") or "1.0.0")
+    except Exception as e:  # noqa: BLE001
+        print(f"· 读 package.json 版本失败（{e}），回退 {VERSION}")
+
+_m = re.match(r"^(\d+)\.(\d+)\.(\d+)", VERSION)
+CODE = int(_m.group(1)) * 10000 + int(_m.group(2)) * 100 + int(_m.group(3)) if _m else 1
+
+if re.search(r"^\s*versionCode\s+\d+", src, re.M):
+    src = re.sub(r"^(\s*)versionCode\s+\d+", rf"\g<1>versionCode {CODE}", src, count=1, flags=re.M)
+    print(f"✓ versionCode → {CODE}")
+else:
+    print("· 未找到 versionCode，跳过")
+
+if re.search(r'^\s*versionName\s+"[^"]*"', src, re.M):
+    src = re.sub(
+        r'^(\s*)versionName\s+"[^"]*"', rf'\g<1>versionName "{VERSION}"', src, count=1, flags=re.M
+    )
+    print(f"✓ versionName → {VERSION}")
+else:
+    print("· 未找到 versionName，跳过")
+
 # 结构自检：大括号必须配平，否则 Gradle 直接语法报错
 depth = 0
 for ch in src:
@@ -93,6 +132,15 @@ for field in ("storeFile", "storePassword", "keyAlias", "keyPassword"):
     if not re.search(rf'{field} .*"', src):
         print(f"✗ {field} 的值缺少引号 —— Groovy 会报语法错误", file=sys.stderr)
         sys.exit(1)
+
+# 版本号自检：确认真的写进去了（写错版本号不会让构建失败，但会让人对不上号）
+if f'versionName "{VERSION}"' not in src:
+    print(f"✗ versionName 未写成功，期望 {VERSION}", file=sys.stderr)
+    sys.exit(1)
+if f"versionCode {CODE}" not in src:
+    print(f"✗ versionCode 未写成功，期望 {CODE}", file=sys.stderr)
+    sys.exit(1)
+print(f"✓ 版本号已写入：versionName={VERSION} versionCode={CODE}")
 
 PATH.write_text(src, encoding="utf-8", newline="\n")
 

@@ -1,7 +1,7 @@
 {
   "name": "workhours-app",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "description": "工时记 — 记录工时、自动算工资、日历视图的圆角风手机 App",
   "scripts": {
@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "check": "node scripts/check-pay.mjs",
     "check:savings": "node scripts/check-savings.mjs",
-    "verify": "npm run check && npm run check:savings && npm run check:holidays && npm run check:android && npm run typecheck && npm run build",
+    "check:signing": "node scripts/check-inject-signing.mjs",
+    "verify": "npm run check && npm run check:savings && npm run check:signing && npm run check:holidays && npm run check:android && npm run typecheck && npm run build",
     "cap:add": "cap add android",
     "cap:sync": "cap sync android",
     "android:open": "cap open android",

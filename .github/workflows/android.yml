@@ -60,6 +60,9 @@ jobs:
       - name: 存款目标 / 累计 / 老数据迁移自检
         run: npm run check:savings
 
+      - name: 签名注入脚本自检（含版本号注入）
+        run: npm run check:signing
+
       - name: 节假日数据自检
         run: npm run check:holidays
 
@@ -138,6 +141,25 @@ jobs:
             "$APKSIGNER" verify --print-certs "$apk" | grep -i "certificate DN\|SHA-256 digest" | head -4
           done
 
+      - name: 校验 APK 里的版本号与 package.json 一致
+        run: |
+          # 注入脚本是否真的把版本写进了 APK？光看 build.gradle 不够，
+          # 这里直接读 APK 的 manifest。不一致就拦住 —— 否则 Releases 页写的
+          # 版本号会和手机上「应用信息」里显示的对不上。
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt2 -type f | sort | tail -1)
+          APK=$(find android/app/build/outputs/apk/debug -name "*.apk" | head -1)
+          echo "aapt2: $AAPT"
+          echo "apk:   $APK"
+          VERSION=$(node -p "require('./package.json').version")
+          BADGING=$("$AAPT" dump badging "$APK" | grep -E "^package:")
+          echo "$BADGING"
+          if echo "$BADGING" | grep -q "versionName='$VERSION'"; then
+            echo "✓ APK versionName = $VERSION（与 package.json 一致）"
+          else
+            echo "✗ APK versionName 与 package.json 不一致，期望 $VERSION"
+            exit 1
+          fi
+
       - name: 整理产物
         run: |
           mkdir -p out
@@ -155,8 +177,38 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - name: 附加到 Release
-        if: github.event_name == 'release'
+      - name: 读取版本号
+        id: ver
+        run: echo "APP_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+
+      - name: 发布到 Releases（滚动更新，下载链接永久有效）
+        # 之前这里写的是 `if: github.event_name == 'release'` —— 只有「被 release 事件触发」才跑，
+        # 但本工作流是 push 触发的，所以这一步**从来没执行过**，Releases 页一直是空的。
+        # 现在改成：只要推送到主分支就滚动更新同一个 Release（固定 tag = latest）。
+        #   好处：下载链接永久有效，不用每次换
+        #         https://github.com/Animal2404/workhours-app/releases/latest/download/工时记.apk
+        #   旧版仍可在 Actions 的构建产物里取（保留 90 天）
+        if: github.event_name == 'push'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: latest
+          name: 工时记 v${{ env.APP_VERSION }}（最新版）
+          make_latest: true
+          body: |
+            ## 工时记 · 最新构建
+
+            点下面的 **工时记.apk** 下载，传到手机上安装即可。
+
+            - 版本：**v${{ env.APP_VERSION }}**
+            - 提交：`${{ github.sha }}`
+            - 构建：${{ github.event.head_commit.timestamp }}
+
+            ### 安装说明
+            - **覆盖安装不会丢数据**：本包使用仓库里固定的调试签名，
+              可以直接覆盖安装旧版，本地工时记录保留。
+            - 如果是第一次装、或之前用的是别的签名，需要先卸载旧版再装。
+            - 安装时若提示「未知来源」，在系统设置里允许安装未知应用即可。
+
+            每次推送到主分支，这里都会自动重新构建并更新（包括下面的 APK 附件）。
           files: out/*.apk
+          fail_on_unmatched_files: true
