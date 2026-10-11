@@ -1205,7 +1205,12 @@
 }
 
 .ring-bar {
-  stroke: url(#ringGrad);
+  /* ⚠️ 这里**不能**写 stroke。
+     组件用 useId() 给每个环生成唯一渐变 id，并写在 SVG 行内属性 stroke="url(#r0)" 上；
+     而 CSS 规则的优先级高于 SVG presentation attribute ——
+     以前这里写死了 stroke: url(#ringGrad)，于是把行内那个正确的 id 盖掉，
+     指向一个文档里根本不存在的渐变 → 弧线整条不可见（进度环永远只有灰底）。
+     弧的颜色交给组件行内属性即可。 */
   stroke-linecap: round;
   transition: stroke-dashoffset 620ms var(--ease-out);
 }
@@ -1720,4 +1725,384 @@
   to {
     background-position: 0 50%;
   }
+}
+
+/* ============================================================
+   本轮新增：累计收入 / 批量记账 / 记账提醒
+   ============================================================ */
+
+/* ---------- 顶部卡片里的「累计」一行 ----------
+   是个按钮（点了跳统计页看逐月明细），所以要把按钮默认样式清干净。 */
+.hero-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  width: 100%;
+  margin-top: 12px;
+  padding: 9px 12px;
+  border-radius: var(--r-md);
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--hero-fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--t-fast) ease, transform var(--t-press) var(--ease-out);
+}
+
+.hero-total:active {
+  transform: scale(0.985);
+}
+
+.hero-total-main {
+  font-size: 13px;
+  font-weight: 640;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-total-days {
+  margin-left: 5px;
+  font-weight: 500;
+  opacity: 0.72;
+}
+
+.hero-mom {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 620;
+  padding: 3px 8px;
+  border-radius: var(--r-full);
+  background: rgba(255, 255, 255, 0.16);
+  font-variant-numeric: tabular-nums;
+}
+
+.hero-mom.is-up {
+  color: #b8f5cf;
+}
+
+.hero-mom.is-down {
+  color: #ffd9d0;
+}
+
+/* ---------- 日历右上角：批量模式开关 ---------- */
+.icon-btn.is-on {
+  background: var(--brand);
+  color: var(--on-brand);
+  border-color: transparent;
+}
+
+.icon-btn.is-small {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+}
+
+/* ---------- 批量选择态 ---------- */
+/* 批量模式下所有可选格子给一点暗示，避免用户以为还是单击模式 */
+.day.is-batch {
+  cursor: pointer;
+}
+
+.day.is-batch::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: var(--r-full);
+  border: 1.5px solid var(--line-strong);
+}
+
+.day.is-picked {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+}
+
+.day.is-picked::before {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.day.is-picked .day-num {
+  color: var(--brand);
+  font-weight: 720;
+}
+
+/* 勾选标记：右上角小徽标（和右上角的补贴小圆点错开，不打架） */
+.day-tick {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--r-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.day.is-picked .day-tick {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+
+/* ---------- 批量操作区 ---------- */
+.batch-bar {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.batch-quick {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.batch-count {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.batch-count strong {
+  color: var(--brand);
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
+  margin-inline: 2px;
+}
+
+/* ---------- 记账提醒条 ---------- */
+.reminder-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+  padding: 10px 12px;
+  border-radius: var(--r-md);
+  background: var(--brand-soft);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  animation: reminderIn 220ms var(--ease-out);
+}
+
+@keyframes reminderIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.reminder-text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 窄屏下提醒条改为两行，别把按钮挤扁 */
+@media (max-width: 359px) {
+  .reminder-bar {
+    flex-wrap: wrap;
+  }
+
+  .reminder-text {
+    flex: 1 0 100%;
+    order: -1;
+  }
+}
+
+/* ---------- 统计页：逐月明细 ---------- */
+.month-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.month-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 11px 2px;
+  border-bottom: 1px solid var(--line);
+  width: 100%;
+  background: none;
+  border-inline: 0;
+  border-top: 0;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+
+.month-row:last-child {
+  border-bottom: 0;
+}
+
+.month-row:active {
+  background: var(--surface-sunken);
+}
+
+.month-row-name {
+  font-size: 13.5px;
+  font-weight: 640;
+  color: var(--text);
+  flex: none;
+  min-width: 82px;
+}
+
+.month-row-meta {
+  flex: 1;
+  font-size: 11.5px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.month-row-net {
+  font-size: 14px;
+  font-weight: 680;
+  color: var(--money);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+/* ---------- 存款目标卡 ---------- */
+.goal-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.goal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
+.goal-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.015em;
+}
+
+.goal-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.goal-body {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.goal-ring {
+  flex: none;
+  position: relative;
+  width: 96px;
+  height: 96px;
+}
+
+.goal-ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+
+.goal-ring-pct {
+  font-size: 19px;
+  font-weight: 720;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.goal-ring-cap {
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+.goal-facts {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.goal-fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  font-size: 12.5px;
+}
+
+.goal-fact-k {
+  color: var(--text-3);
+  flex: none;
+}
+
+.goal-fact-v {
+  color: var(--text);
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.goal-fact-v.is-money {
+  color: var(--money);
+}
+
+.goal-fact-v.is-brand {
+  color: var(--brand);
+}
+
+.goal-done {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 640;
+  color: var(--money);
+}
+
+/* 目标操作按钮排 */
+.goal-actions {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+/* 目标表单里的分段选择（起算日快捷选项） */
+.seg-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
 }

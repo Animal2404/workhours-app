@@ -14,19 +14,31 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import type { AppState, DayEntry, RecurringRule, Settings, ShiftTemplate } from './types';
+import type {
+  AppState,
+  DayEntry,
+  RecurringRule,
+  SavingsGoal,
+  Settings,
+  ShiftTemplate,
+} from './types';
 import { coerceState, defaultState, loadState, saveState } from './storage';
 import { hasContent, normalizeEntry } from './pay';
 
 type Action =
   | { type: 'upsert'; entry: DayEntry }
+  | { type: 'upsertMany'; entries: DayEntry[] }
   | { type: 'remove'; date: string }
+  | { type: 'removeMany'; dates: string[] }
   | { type: 'patchSettings'; patch: Partial<Settings> }
   | { type: 'addTemplate'; template: ShiftTemplate }
   | { type: 'removeTemplate'; id: string }
   | { type: 'addRecurring'; rule: RecurringRule }
   | { type: 'removeRecurring'; id: string }
   | { type: 'toggleRecurring'; id: string }
+  | { type: 'addSavingsGoal'; goal: SavingsGoal }
+  | { type: 'updateSavingsGoal'; id: string; patch: Partial<SavingsGoal> }
+  | { type: 'removeSavingsGoal'; id: string }
   | { type: 'replace'; state: AppState }
   | { type: 'clearEntries' };
 
@@ -43,9 +55,27 @@ function reducer(state: AppState, action: Action): AppState {
       }
       return { ...state, entries };
     }
+    case 'upsertMany': {
+      // 批量记账：一次 dispatch 改多天。
+      // 不循环调用 upsert 是有意的 —— 那样 N 天就会跑 N 次 reducer + N 次落盘，
+      // 批量选 20 天时会明显卡。
+      const entries = { ...state.entries };
+      for (const raw of action.entries) {
+        const entry = normalizeEntry(raw);
+        if (hasContent(entry)) entries[entry.date] = entry;
+        else delete entries[entry.date];
+      }
+      return { ...state, entries };
+    }
     case 'remove': {
       const entries = { ...state.entries };
       delete entries[action.date];
+      return { ...state, entries };
+    }
+    case 'removeMany': {
+      // 批量清空：同样只跑一次 reducer / 落盘一次
+      const entries = { ...state.entries };
+      for (const d of action.dates) delete entries[d];
       return { ...state, entries };
     }
     case 'patchSettings':
@@ -92,6 +122,32 @@ function reducer(state: AppState, action: Action): AppState {
           ),
         },
       };
+    case 'addSavingsGoal':
+      return {
+        ...state,
+        settings: {
+          ...state.settings,
+          savingsGoals: [...state.settings.savingsGoals, action.goal],
+        },
+      };
+    case 'updateSavingsGoal':
+      return {
+        ...state,
+        settings: {
+          ...state.settings,
+          savingsGoals: state.settings.savingsGoals.map((g) =>
+            g.id === action.id ? { ...g, ...action.patch } : g,
+          ),
+        },
+      };
+    case 'removeSavingsGoal':
+      return {
+        ...state,
+        settings: {
+          ...state.settings,
+          savingsGoals: state.settings.savingsGoals.filter((g) => g.id !== action.id),
+        },
+      };
     case 'replace':
       return coerceState(action.state);
     case 'clearEntries':
@@ -104,13 +160,20 @@ function reducer(state: AppState, action: Action): AppState {
 export interface StoreValue {
   state: AppState;
   upsert: (entry: DayEntry) => void;
+  /** 批量写入多天（一次落盘） */
+  upsertMany: (entries: DayEntry[]) => void;
   remove: (date: string) => void;
+  /** 批量清空多天 */
+  removeMany: (dates: string[]) => void;
   patchSettings: (patch: Partial<Settings>) => void;
   addTemplate: (template: ShiftTemplate) => void;
   removeTemplate: (id: string) => void;
   addRecurring: (rule: RecurringRule) => void;
   removeRecurring: (id: string) => void;
   toggleRecurring: (id: string) => void;
+  addSavingsGoal: (goal: SavingsGoal) => void;
+  updateSavingsGoal: (id: string, patch: Partial<SavingsGoal>) => void;
+  removeSavingsGoal: (id: string) => void;
   replace: (state: AppState) => void;
   clearEntries: () => void;
   /** 存储写入失败时为 true（隐私模式 / 配额满） */
@@ -191,7 +254,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const upsert = useCallback((entry: DayEntry) => dispatch({ type: 'upsert', entry }), []);
+  const upsertMany = useCallback(
+    (entries: DayEntry[]) => dispatch({ type: 'upsertMany', entries }),
+    [],
+  );
   const remove = useCallback((date: string) => dispatch({ type: 'remove', date }), []);
+  const removeMany = useCallback(
+    (dates: string[]) => dispatch({ type: 'removeMany', dates }),
+    [],
+  );
   const patchSettings = useCallback(
     (patch: Partial<Settings>) => dispatch({ type: 'patchSettings', patch }),
     [],
@@ -219,17 +290,36 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const replace = useCallback((next: AppState) => dispatch({ type: 'replace', state: next }), []);
   const clearEntries = useCallback(() => dispatch({ type: 'clearEntries' }), []);
 
+  const addSavingsGoal = useCallback(
+    (goal: SavingsGoal) => dispatch({ type: 'addSavingsGoal', goal }),
+    [],
+  );
+  const updateSavingsGoal = useCallback(
+    (id: string, patch: Partial<SavingsGoal>) =>
+      dispatch({ type: 'updateSavingsGoal', id, patch }),
+    [],
+  );
+  const removeSavingsGoal = useCallback(
+    (id: string) => dispatch({ type: 'removeSavingsGoal', id }),
+    [],
+  );
+
   const value = useMemo<StoreValue>(
     () => ({
       state,
       upsert,
+      upsertMany,
       remove,
+      removeMany,
       patchSettings,
       addTemplate,
       removeTemplate,
       addRecurring,
       removeRecurring,
       toggleRecurring,
+      addSavingsGoal,
+      updateSavingsGoal,
+      removeSavingsGoal,
       replace,
       clearEntries,
       storageFailed,
@@ -237,13 +327,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [
       state,
       upsert,
+      upsertMany,
       remove,
+      removeMany,
       patchSettings,
       addTemplate,
       removeTemplate,
       addRecurring,
       removeRecurring,
       toggleRecurring,
+      addSavingsGoal,
+      updateSavingsGoal,
+      removeSavingsGoal,
       replace,
       clearEntries,
       storageFailed,

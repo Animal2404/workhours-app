@@ -10,15 +10,19 @@ import type { AppState, DayEntry } from '../lib/types';
 import {
   computeDayPay,
   goalProgress,
+  monthOverMonth,
   projectMonthIncome,
+  summarizeAll,
   summarizeMonth,
   workedDaysInMonth,
 } from '../lib/pay';
 import {
+  addDaysKey,
   dateLabel,
   formatHours,
   formatMoney,
   fromKey,
+  monthEndKey,
   monthLabel,
   monthMatrix,
   relativeLabel,
@@ -28,25 +32,60 @@ import {
   weekdayHeaders,
 } from '../lib/date';
 import { getHoliday, holidayCoverageNote } from '../lib/holidays';
-import { ChevronLeftIcon, ChevronRightIcon, FlameIcon, MorphingIcon, Plus, X } from '../components/Icon';
+import {
+  CheckIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  FlameIcon,
+  ListChecksIcon,
+  MorphingIcon,
+  Plus,
+  X,
+} from '../components/Icon';
 import { BlurFade, MagicCard, NumberTicker, ProgressBar } from '../components/magic';
 import { EntrySheet } from '../components/EntrySheet';
+import { BatchSheet } from '../components/BatchSheet';
 
 interface CalendarPageProps {
   state: AppState;
   onSave: (entry: DayEntry) => void;
+  /** 批量写入：一次 dispatch 落盘多天 */
+  onSaveMany: (entries: DayEntry[]) => void;
+  /** 批量清空 */
+  onDeleteMany: (dates: string[]) => void;
   onDelete: (date: string) => void;
   onToast: (text: string, tone?: 'info' | 'ok') => void;
+  /** 跳去统计页看逐月明细 */
+  onGoStats: () => void;
 }
 
-export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageProps) {
+export function CalendarPage({
+  state,
+  onSave,
+  onSaveMany,
+  onDeleteMany,
+  onDelete,
+  onToast,
+  onGoStats,
+}: CalendarPageProps) {
   const now = new Date();
   const [view, setView] = useState({ year: now.getFullYear(), month0: now.getMonth() });
   const [selected, setSelected] = useState<string>(todayKey());
   const [sheetOpen, setSheetOpen] = useState(false);
 
+  // ---------- 批量记账 ----------
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchDates, setBatchDates] = useState<string[]>([]);
+  const [batchOpen, setBatchOpen] = useState(false);
+
   const { settings } = state;
   const today = todayKey();
+
+  const allTime = useMemo(() => summarizeAll(state), [state]);
+  const mom = useMemo(
+    () => monthOverMonth(view.year, view.month0, state),
+    [view, state],
+  );
 
   const summary = useMemo(
     () => summarizeMonth(view.year, view.month0, state),
@@ -97,8 +136,46 @@ export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageP
   };
 
   const openDay = (key: string) => {
+    // 批量模式下，点格子 = 勾选/取消，不打开单天抽屉
+    if (batchMode) {
+      setBatchDates((prev) =>
+        prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key].sort(),
+      );
+      return;
+    }
     setSelected(key);
     setSheetOpen(true);
+  };
+
+  const exitBatch = () => {
+    setBatchMode(false);
+    setBatchDates([]);
+  };
+
+  /** 批量：选中一个连续区间（含首尾），上限 62 天防误操作 */
+  const selectRange = (from: string, to: string) => {
+    const out: string[] = [];
+    let k = from;
+    for (let i = 0; i < 62 && k <= to; i++) {
+      out.push(k);
+      k = addDaysKey(k, 1);
+    }
+    setBatchDates(out);
+  };
+
+  const handleBatchSave = (entries: DayEntry[]) => {
+    onSaveMany(entries);
+    const total = entries.reduce(
+      (sum, e) => sum + computeDayPay(e, settings).net,
+      0,
+    );
+    onToast(
+      `已记 ${entries.length} 天 · 共 ${settings.currency}${formatMoney(Math.round(total * 100) / 100)}`,
+      'ok',
+    );
+    // 记完就退出批量模式：留着一条禁用的「记这 0 天」只会让人困惑，
+    // 而且此时点格子是「勾选」不是「打开」，容易误操作
+    exitBatch();
   };
 
   const handleSave = (entry: DayEntry) => {
@@ -145,6 +222,29 @@ export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageP
               format={(n) => formatMoney(n, n % 1 < 0.005 ? 0 : 2)}
             />
           </div>
+
+          {/* 累计 + 环比：解决「上个月的工资这个月看不到」 */}
+          <button
+            type="button"
+            className="hero-total"
+            onClick={onGoStats}
+            title="查看逐月明细"
+          >
+            <span className="hero-total-main">
+              累计 {settings.currency}
+              {formatMoney(allTime.net, allTime.net % 1 < 0.005 ? 0 : 2)}
+              <span className="hero-total-days">· {allTime.days} 天</span>
+            </span>
+            {mom.prevNet > 0 ? (
+              <span className={`hero-mom ${mom.diff >= 0 ? 'is-up' : 'is-down'}`}>
+                上月 {settings.currency}
+                {formatMoney(mom.prevNet, 0)}
+                {mom.pct !== null
+                  ? ` ${mom.diff >= 0 ? '↑' : '↓'}${Math.abs(mom.pct).toFixed(0)}%`
+                  : ''}
+              </span>
+            ) : null}
+          </button>
 
           <div className="hero-meta">
             <div className="hero-meta-item">
@@ -221,6 +321,15 @@ export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageP
             <div className="cal-nav">
               <button
                 type="button"
+                className={`icon-btn ${batchMode ? 'is-on' : ''}`}
+                aria-label={batchMode ? '退出批量记账' : '批量记账'}
+                aria-pressed={batchMode}
+                onClick={() => (batchMode ? exitBatch() : setBatchMode(true))}
+              >
+                <ListChecksIcon size={18} />
+              </button>
+              <button
+                type="button"
                 className="icon-btn"
                 aria-label="上一个月"
                 onClick={() => goMonth(-1)}
@@ -273,6 +382,8 @@ export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageP
               const isMakeup = holiday?.kind === 'workday';
               const holidayLabel = holiday && holiday.name ? (isMakeup ? '班' : holiday.name) : null;
 
+              const picked = batchMode && batchDates.includes(key);
+
               const classes = [
                 'day',
                 hasHours ? 'has-hours' : '',
@@ -281,6 +392,8 @@ export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageP
                 key === selected ? 'is-selected' : '',
                 holidayLabel ? 'has-holiday' : '',
                 isMakeup ? 'is-makeup' : '',
+                batchMode ? 'is-batch' : '',
+                picked ? 'is-picked' : '',
               ]
                 .filter(Boolean)
                 .join(' ');
@@ -292,9 +405,12 @@ export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageP
                   className={classes}
                   data-date={key}
                   onClick={() => openDay(key)}
+                  aria-pressed={batchMode ? picked : undefined}
                   aria-label={`${dateLabel(key)}${
                     holidayLabel ? `，${isMakeup ? '调休上班' : holiday!.name}` : ''
-                  }${hasHours ? `，${formatHours(pay!.totalHours)}小时，${formatMoney(pay!.net)}元` : '，无记录'}`}
+                  }${hasHours ? `，${formatHours(pay!.totalHours)}小时，${formatMoney(pay!.net)}元` : '，无记录'}${
+                    batchMode ? (picked ? '，已选中' : '，未选中') : ''
+                  }`}
                   aria-current={key === today ? 'date' : undefined}
                 >
                   <span className="day-num">{dayNum}</span>
@@ -307,10 +423,63 @@ export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageP
                     </span>
                   ) : null}
                   {hasExtra ? <span className="day-dot" /> : null}
+                  {/* 批量模式下右上角显示勾选态 */}
+                  {batchMode ? (
+                    <span className="day-tick" aria-hidden="true">
+                      {picked ? <CheckIcon size={11} /> : null}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
           </div>
+
+          {/* ---------------- 批量操作区 ---------------- */}
+          {batchMode ? (
+            <div className="batch-bar">
+              <div className="batch-quick">
+                <span className="hint">快速选中</span>
+                <button
+                  type="button"
+                  className="chip"
+                  onClick={() => {
+                    const first = `${view.year}-${String(view.month0 + 1).padStart(2, '0')}-01`;
+                    selectRange(first, monthEndKey(view.year, view.month0));
+                  }}
+                >
+                  整月
+                </button>
+                {isCurrentMonth ? (
+                  <button
+                    type="button"
+                    className="chip"
+                    onClick={() => selectRange(`${view.year}-${String(view.month0 + 1).padStart(2, '0')}-01`, today)}
+                  >
+                    本月已过
+                  </button>
+                ) : null}
+                <button type="button" className="chip" onClick={() => setBatchDates([])}>
+                  清空选择
+                </button>
+              </div>
+              <div className="batch-actions">
+                <span className="batch-count">
+                  已选 <strong>{batchDates.length}</strong> 天
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={batchDates.length === 0}
+                  onClick={() => setBatchOpen(true)}
+                >
+                  记这 {batchDates.length} 天
+                </button>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={exitBatch}>
+                  退出
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="day-legend">
             <span>
@@ -445,6 +614,19 @@ export function CalendarPage({ state, onSave, onDelete, onToast }: CalendarPageP
           onToast('已删除这天的记录');
         }}
         onClose={() => setSheetOpen(false)}
+      />
+
+      <BatchSheet
+        open={batchOpen}
+        dates={batchDates}
+        state={state}
+        onSave={handleBatchSave}
+        onDelete={(ds) => {
+          onDeleteMany(ds);
+          onToast(`已清空 ${ds.length} 天的记录`);
+          setBatchDates([]);
+        }}
+        onClose={() => setBatchOpen(false)}
       />
     </div>
   );

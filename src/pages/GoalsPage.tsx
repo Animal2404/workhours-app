@@ -4,26 +4,60 @@
    月度工资目标 + 每日工时目标 + 一点成就感
    ============================================================ */
 
-import { useMemo } from 'react';
-import type { AppState } from '../lib/types';
-import { summarizeMonth, computeDayPay, currentStreak } from '../lib/pay';
-import { formatHours, formatMoney, monthKeys, monthLabel, toKey } from '../lib/date';
-import { CheckIcon, TrendIcon } from '../components/Icon';
-import { Target } from 'lucide';
+import { useMemo, useState } from 'react';
+import type { AppState, SavingsGoal } from '../lib/types';
+import {
+  currentStreak,
+  computeDayPay,
+  savingsProgress,
+  summarizeMonth,
+} from '../lib/pay';
+import {
+  formatHours,
+  formatMoney,
+  monthKeys,
+  monthLabel,
+  relativeLabel,
+  shortDateLabel,
+  toKey,
+} from '../lib/date';
+import { CheckIcon, PencilIcon, PlusIcon, TrendIcon } from '../components/Icon';
+import { PiggyBank, Target } from 'lucide';
 import { AnimatedCircularProgressBar, BlurFade, LAZY_CARD, NumberTicker, ProgressBar } from '../components/magic';
 import { Empty } from '../components/ui';
+import { GoalSheet } from '../components/GoalSheet';
 
 export function GoalsPage({
   state,
   onGoSettings,
+  onAddGoal,
+  onUpdateGoal,
+  onRemoveGoal,
 }: {
   state: AppState;
   onGoSettings: () => void;
+  onAddGoal: (goal: SavingsGoal) => void;
+  onUpdateGoal: (id: string, patch: Partial<SavingsGoal>) => void;
+  onRemoveGoal: (id: string) => void;
 }) {
   const now = new Date();
   const year = now.getFullYear();
   const month0 = now.getMonth();
   const { settings } = state;
+  const savingsGoals = settings.savingsGoals;
+
+  // 存款目标抽屉
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing, setEditing] = useState<SavingsGoal | null>(null);
+
+  const openNew = () => {
+    setEditing(null);
+    setSheetOpen(true);
+  };
+  const openEdit = (g: SavingsGoal) => {
+    setEditing(g);
+    setSheetOpen(true);
+  };
 
   const summary = useMemo(() => summarizeMonth(year, month0, state), [year, month0, state]);
   const streak = useMemo(() => currentStreak(state, now), [state, now]);
@@ -69,7 +103,8 @@ export function GoalsPage({
     return best;
   }, [year, month0, state, settings]);
 
-  if (goal <= 0 && !settings.dailyGoalHours) {
+  // 三样都没有才显示「空」页；有存款目标就不再是空页（那才是这个页面现在的重点）
+  if (goal <= 0 && !settings.dailyGoalHours && savingsGoals.length === 0) {
     return (
       <div className="page page-enter">
         <header className="topbar">
@@ -82,14 +117,28 @@ export function GoalsPage({
           <Empty
             icon={Target}
             title="还没有设定目标"
-            text="定个小目标，App 会帮你算每天需要赚多少、还差几天达成。"
+            text="想买点什么？设个金额，App 帮你算还差多少、还要上几天班。"
             action={
-              <button type="button" className="btn btn-soft btn-sm" onClick={onGoSettings}>
-                去设置目标
-              </button>
+              <div className="goal-actions" style={{ justifyContent: 'center' }}>
+                <button type="button" className="btn btn-primary btn-sm" onClick={openNew}>
+                  <PlusIcon size={13} /> 添加存款目标
+                </button>
+                <button type="button" className="btn btn-soft btn-sm" onClick={onGoSettings}>
+                  月度目标
+                </button>
+              </div>
             }
           />
         </section>
+
+        <GoalSheet
+          open={sheetOpen}
+          goal={editing}
+          state={state}
+          onSave={(g) => (editing ? onUpdateGoal(editing.id, g) : onAddGoal(g))}
+          onDelete={onRemoveGoal}
+          onClose={() => setSheetOpen(false)}
+        />
       </div>
     );
   }
@@ -105,6 +154,112 @@ export function GoalsPage({
           调整
         </button>
       </header>
+
+      {/* ---------------- 存款目标 ---------------- */}
+      <BlurFade style={LAZY_CARD}>
+        <section className="card">
+          <div className="card-title">
+            <span>存款目标</span>
+            {savingsGoals.length > 0 ? (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={openNew}>
+                <PlusIcon size={13} /> 添加
+              </button>
+            ) : null}
+          </div>
+
+          {savingsGoals.length === 0 ? (
+            <Empty
+              icon={PiggyBank}
+              title="还没有存款目标"
+              text="比如「买 iPhone 18」，设个金额，App 会告诉你还差多少、还要上几天班。"
+              action={
+                <button type="button" className="btn btn-primary btn-sm" onClick={openNew}>
+                  添加目标
+                </button>
+              }
+            />
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-4)' }}>
+              {savingsGoals.map((g) => {
+                const prog = savingsProgress(g, state, now);
+                const rel = relativeLabel(g.startDate);
+                return (
+                  <div key={g.id} className="goal-card">
+                    <div className="goal-head">
+                      <div style={{ minWidth: 0 }}>
+                        <div className="goal-name">{g.name}</div>
+                        <div className="goal-sub">
+                          目标 {settings.currency}
+                          {formatMoney(g.target, 0)}
+                          {rel ? ` · 从${rel}起算` : ''}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="icon-btn is-small"
+                        aria-label={`编辑目标 ${g.name}`}
+                        onClick={() => openEdit(g)}
+                      >
+                        <PencilIcon size={14} />
+                      </button>
+                    </div>
+
+                    <div className="goal-body">
+                      <AnimatedCircularProgressBar
+                        value={prog.pct}
+                        size={96}
+                        strokeWidth={9}
+                        label={prog.achieved ? '已达成' : '进度'}
+                      />
+                      <div className="goal-facts">
+                        <div className="goal-fact">
+                          <span className="goal-fact-k">已攒</span>
+                          <span className="goal-fact-v is-money">
+                            {settings.currency}
+                            {formatMoney(prog.saved, 0)}
+                          </span>
+                        </div>
+                        <div className="goal-fact">
+                          <span className="goal-fact-k">{prog.achieved ? '超出' : '还差'}</span>
+                          <span className="goal-fact-v">
+                            {settings.currency}
+                            {formatMoney(
+                              prog.achieved ? prog.saved - prog.target : prog.remaining,
+                              0,
+                            )}
+                          </span>
+                        </div>
+                        <div className="goal-fact">
+                          <span className="goal-fact-k">还要上班</span>
+                          <span className="goal-fact-v is-brand">
+                            {prog.workDaysNeeded === null
+                              ? '记账后可知'
+                              : prog.workDaysNeeded === 0
+                                ? '不用了 🎉'
+                                : `${prog.workDaysNeeded} 天`}
+                          </span>
+                        </div>
+                        <div className="goal-fact">
+                          <span className="goal-fact-k">预计达成</span>
+                          <span className="goal-fact-v">
+                            {prog.etaKey ? shortDateLabel(prog.etaKey) : '数据还不够'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p className="tiny muted">
+                      {prog.workedDays > 0
+                        ? `起算至今出勤 ${prog.workedDays} 天，平均每个出勤日 ${settings.currency}${formatMoney(prog.avgPerWorkedDay, 0)}。`
+                        : '这段时间还没有收入记录，先记几天就能估出速度。'}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </BlurFade>
 
       {/* 月度工资目标 */}
       {goal > 0 ? (
@@ -245,6 +400,15 @@ export function GoalsPage({
           ) : null}
         </section>
       </BlurFade>
+
+      <GoalSheet
+        open={sheetOpen}
+        goal={editing}
+        state={state}
+        onSave={(g) => (editing ? onUpdateGoal(editing.id, g) : onAddGoal(g))}
+        onDelete={onRemoveGoal}
+        onClose={() => setSheetOpen(false)}
+      />
     </div>
   );
 }

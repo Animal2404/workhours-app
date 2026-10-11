@@ -24,8 +24,10 @@ import {
   Coffee,
   Download,
   Flame,
+  ListChecks,
   Moon,
   Pencil,
+  PiggyBank,
   Plus,
   Settings,
   Sparkles,
@@ -151,6 +153,9 @@ export const CoffeeIcon = wrap(Coffee);
 export const PencilIcon = wrap(Pencil);
 export const CheckIcon = wrap(Check);
 export const SparklesIcon = wrap(Sparkles);
+export const ListChecksIcon = wrap(ListChecks);
+export const PiggyBankIcon = wrap(PiggyBank);
+export const PlusIcon = wrap(Plus);
 export const SunIcon = wrap(Sun);
 export const MoonIcon = wrap(Moon);
 

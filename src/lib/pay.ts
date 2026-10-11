@@ -13,8 +13,8 @@
    不会出现「明细之和 ≠ 合计」这种让人不信任的情况。
    ============================================================ */
 
-import type { AppState, DayEntry, DayPay, RangeSummary, Settings } from './types';
-import { monthKeys } from './date';
+import type { AppState, DayEntry, DayPay, RangeSummary, SavingsGoal, Settings } from './types';
+import { addDaysKey, daysBetweenKeys, monthIndexOf, monthKeys, monthLabel, shiftMonth } from './date';
 
 /** 四舍五入到分（两位小数），消除浮点误差 */
 export function round2(n: number): number {
@@ -293,4 +293,163 @@ export function normalizeEntry(input: Partial<DayEntry> & { date: string }, now 
   const note = input.note?.trim();
   if (note) out.note = note.slice(0, 500);
   return out;
+}
+
+/* ============================================================
+   全部月份：累计与逐月明细
+   ============================================================ */
+
+/** 所有有记录的日期，升序 */
+export function allEntryKeys(state: AppState): string[] {
+  return Object.keys(state.entries).sort();
+}
+
+/** 全部记录的总汇总（不受月份限制） */
+export function summarizeAll(state: AppState): RangeSummary {
+  return summarize(allEntryKeys(state), state);
+}
+
+export interface MonthBucket {
+  year: number;
+  month0: number;
+  /** 形如「2026年9月」 */
+  label: string;
+  net: number;
+  hours: number;
+  days: number;
+}
+
+/**
+ * 逐月明细，**从新到旧**。
+ * 用于「上个月的工资这月看不到」——把所有月份都列出来，一眼能翻到上月。
+ */
+export function monthlyHistory(state: AppState): MonthBucket[] {
+  const buckets = new Map<string, { year: number; month0: number; keys: string[] }>();
+  for (const key of allEntryKeys(state)) {
+    const { year, month0 } = monthIndexOf(key);
+    const id = `${year}-${String(month0).padStart(2, '0')}`;
+    const b = buckets.get(id) ?? { year, month0, keys: [] };
+    b.keys.push(key);
+    buckets.set(id, b);
+  }
+  return [...buckets.values()]
+    .map((b) => {
+      const s = summarize(b.keys, state);
+      return {
+        year: b.year,
+        month0: b.month0,
+        label: monthLabel(b.year, b.month0),
+        net: s.net,
+        hours: s.totalHours,
+        days: s.days,
+      };
+    })
+    .sort((a, b) => b.year - a.year || b.month0 - a.month0);
+}
+
+/* ============================================================
+   存款目标（攒钱买某个东西）
+   ============================================================ */
+
+export interface SavingsProgress {
+  /** 已攒 = initial + 起算日至今的净收入 */
+  saved: number;
+  target: number;
+  remaining: number;
+  /** 0–100 */
+  pct: number;
+  /** 起算日至今赚到的钱 */
+  earned: number;
+  /** 起算日至今出勤天数 */
+  workedDays: number;
+  /** 平均每个出勤日的净收入 */
+  avgPerWorkedDay: number;
+  /** 还需要上几天班（按上面这个均值推）；无法估算时 null */
+  workDaysNeeded: number | null;
+  /** 预计达成日（按起算日至今的自然日速度推）；无法估算时 null */
+  etaKey: string | null;
+  achieved: boolean;
+}
+
+/**
+ * 算一个存款目标的进度。
+ *
+ * 口径说明（写在这是因为它决定了数字对不对）：
+ *  - 只累加 **startDate 之后** 的收入，避免把目标创建前的钱也算进来
+ *  - 「还要上几天班」用 每个出勤日平均净收入 推 → 是**工作日**数
+ *  - 「预计达成日」用 每个自然日平均净收入 推 → 是**日历**日期
+ *    两者口径不同是有意的：前者回答「还得干多少天活」，后者回答「大概几号能买到」
+ */
+export function savingsProgress(
+  goal: SavingsGoal,
+  state: AppState,
+  now = new Date(),
+): SavingsProgress {
+  const today = keyOf(now);
+  // 起算日在未来（导入的坏数据、或手工构造）→ 一分钱都还没算得进来。
+  // 这里不能把 start 夹到 today：那样会把今天的收入算进一个还没开始的目标。
+  const started = goal.startDate <= today;
+  const start = started ? goal.startDate : today;
+
+  let earned = 0;
+  let workedDays = 0;
+  if (started) {
+    for (const key of allEntryKeys(state)) {
+      if (key < start || key > today) continue;
+      const pay = computeDayPay(state.entries[key], state.settings);
+      earned += pay.net;
+      if (pay.totalHours > 0) workedDays++;
+    }
+  }
+  earned = round2(earned);
+
+  const target = Math.max(0, round2(safeNum(goal.target)));
+  const saved = round2(safeNum(goal.initial) + earned);
+  const remaining = Math.max(0, round2(target - saved));
+  const pct = target > 0 ? Math.min(100, (saved / target) * 100) : 0;
+  const avgPerWorkedDay = workedDays > 0 ? round2(earned / workedDays) : 0;
+
+  let workDaysNeeded: number | null = null;
+  if (remaining <= 0) workDaysNeeded = 0;
+  else if (avgPerWorkedDay > 0) workDaysNeeded = Math.ceil(remaining / avgPerWorkedDay);
+
+  let etaKey: string | null = null;
+  if (target > 0 && remaining <= 0) {
+    etaKey = today;
+  } else if (remaining > 0 && started) {
+    const elapsed = Math.max(1, daysBetweenKeys(start, today) + 1);
+    const perCalendarDay = earned / elapsed;
+    if (perCalendarDay > 0) {
+      etaKey = addDaysKey(today, Math.ceil(remaining / perCalendarDay));
+    }
+  }
+
+  return {
+    saved,
+    target,
+    remaining,
+    pct,
+    earned,
+    workedDays,
+    avgPerWorkedDay,
+    workDaysNeeded,
+    etaKey,
+    achieved: target > 0 && remaining <= 0,
+  };
+}
+
+/** 这个月比上个月多赚/少赚多少（环比） */
+export function monthOverMonth(
+  year: number,
+  month0: number,
+  state: AppState,
+): { prevNet: number; diff: number; pct: number | null } {
+  const prev = shiftMonth(year, month0, -1);
+  const prevNet = summarizeMonth(prev.year, prev.month0, state).net;
+  const curNet = summarizeMonth(year, month0, state).net;
+  return {
+    prevNet,
+    diff: round2(curNet - prevNet),
+    pct: prevNet > 0 ? ((curNet - prevNet) / prevNet) * 100 : null,
+  };
 }

@@ -30,7 +30,38 @@ const check = (name, ok, detail = '') => {
 
 const browser = await chromium.launch();
 
-async function open({ width = 393, height = 852, dpr = 3, dark = false } = {}) {
+/** 跳到指定年月（标题用正则取数，不依赖任何写死的偏移量） */
+async function gotoMonth(page, year, month) {
+  const label = async () =>
+    page.evaluate(() => document.querySelector('.cal-month')?.textContent ?? '');
+  for (let i = 0; i < 60; i++) {
+    const lbl = await label();
+    const y = Number((lbl.match(/(\d{4})年/) ?? [])[1] ?? 0);
+    const m = Number((lbl.match(/年(\d{1,2})月/) ?? [])[1] ?? 0);
+    if (y === year && m === month) return true;
+    if (!y) return false;
+    const back = y > year || (y === year && m > month);
+    await page.getByLabel(back ? '上一个月' : '下一个月').click();
+    await page.waitForTimeout(45);
+  }
+  return false;
+}
+
+/**
+ * 打开 App 并**显式跳到 2026-09**。
+ *
+ * 为什么必须显式跳：本文件后面的断言（2026-09-25 中秋节、国庆、春节……）
+ * 全部锚定在 2026-09，而 App 默认打开的是「系统当月」。
+ * 只依赖默认月份的话，跨过 2026-09 之后整批断言会假红 —— 这件事真的发生过。
+ * 传 month: null 可跳过（给那些自己管导航的用例）。
+ */
+async function open({
+  width = 393,
+  height = 852,
+  dpr = 3,
+  dark = false,
+  month = { year: 2026, month: 9 },
+} = {}) {
   const ctx = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: dpr,
@@ -47,6 +78,10 @@ async function open({ width = 393, height = 852, dpr = 3, dark = false } = {}) {
   });
   await page.goto(BASE, { waitUntil: 'load' });
   await page.waitForTimeout(400);
+  if (month) {
+    await gotoMonth(page, month.year, month.month);
+    await page.waitForTimeout(320);
+  }
   return { ctx, page, errors };
 }
 
@@ -281,6 +316,9 @@ for (const w of [320, 360, 393]) {
   const page = await ctx.newPage();
   await page.goto(BASE, { waitUntil: 'load' });
   await page.waitForTimeout(450);
+  // 这段自己建 context（没走 open），所以也得自己跳到锚点月份
+  await gotoMonth(page, 2026, 9);
+  await page.waitForTimeout(320);
 
   const c = await cellInfo(page, '2026-09-25');
   const bad = [];

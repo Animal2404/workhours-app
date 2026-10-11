@@ -40,6 +40,28 @@ export interface RecurringRule {
   enabled: boolean;
 }
 
+/**
+ * 存款目标：攒钱买某个东西（如「买 iPhone 18」）。
+ *
+ * 进度怎么算：**起算日之后的净收入**累加，再加上 initial。
+ * 为什么要有起算日 —— 否则「上个月攒的钱」会莫名其妙算进新目标，
+ * 用户会觉得数字对不上。想让全部历史都算进来，把起算日设成第一次记账那天即可。
+ */
+export interface SavingsGoal {
+  id: string;
+  /** 目标名，如「买 iPhone 18」 */
+  name: string;
+  /** 目标金额（元） */
+  target: number;
+  /** 起算日 YYYY-MM-DD：这天的收入开始计入 */
+  startDate: string;
+  /** 起算时已经攒下的钱（可选，默认 0） */
+  initial: number;
+  createdAt: number;
+  /** 达成时间；有值表示已完成 */
+  achievedAt?: number;
+}
+
 export type ThemeMode = 'system' | 'light' | 'dark';
 
 export interface Settings {
@@ -62,6 +84,8 @@ export interface Settings {
   theme: ThemeMode;
   templates: ShiftTemplate[];
   recurring: RecurringRule[];
+  /** 存款目标列表（买手机、旅游……） */
+  savingsGoals: SavingsGoal[];
 }
 
 export interface AppState {

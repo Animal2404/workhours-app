@@ -6,6 +6,7 @@
 
 import type { AppState, DayEntry, Settings } from './types';
 import { normalizeEntry, safeNum, round2 } from './pay';
+import { toKey } from './date';
 
 const STORAGE_KEY = 'workhours.state.v1';
 const SCHEMA_VERSION = 1;
@@ -27,6 +28,7 @@ export const DEFAULT_SETTINGS: Settings = {
     { id: 't-half', name: '半天', hours: 4, overtimeHours: 0 },
   ],
   recurring: [],
+  savingsGoals: [],
 };
 
 export function defaultState(): AppState {
@@ -74,6 +76,28 @@ export function coerceState(raw: unknown): AppState {
               hours: round2(safeNum(r.hours)),
               overtimeHours: round2(safeNum(r.overtimeHours)),
               enabled: r.enabled !== false,
+            }))
+        : [],
+      // 老数据里没有 savingsGoals → 用默认空数组，不做版本迁移
+      savingsGoals: Array.isArray(s.savingsGoals)
+        ? s.savingsGoals
+            .filter(
+              (g) =>
+                g &&
+                typeof g === 'object' &&
+                typeof g.id === 'string' &&
+                typeof g.name === 'string',
+            )
+            .map((g) => ({
+              id: g.id,
+              name: String(g.name).slice(0, 20) || '目标',
+              target: Math.max(0, round2(safeNum(g.target))),
+              startDate: /^\d{4}-\d{2}-\d{2}$/.test(String(g.startDate))
+                ? String(g.startDate)
+                : toKey(new Date()),
+              initial: Math.max(0, round2(safeNum(g.initial))),
+              createdAt: safeNum(g.createdAt, Date.now()),
+              ...(g.achievedAt ? { achievedAt: safeNum(g.achievedAt) } : {}),
             }))
         : [],
     };

@@ -12,7 +12,7 @@
       否则 memo 形同虚设。
    ============================================================ */
 
-import { memo, useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StoreProvider, useStore, useThemeEffect } from './lib/store';
 import { CalendarPage } from './pages/CalendarPage';
 import { StatsPage } from './pages/StatsPage';
@@ -20,7 +20,8 @@ import { GoalsPage } from './pages/GoalsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { TabBar, type TabKey } from './components/TabBar';
 import { ToastHost, type ToastMsg, type ToastTone } from './components/ui';
-import { BellIcon } from './components/Icon';
+import { BellIcon, ClockIcon, Icon, X } from './components/Icon';
+import { dateLabel, todayKey } from './lib/date';
 
 const MemoCalendarPage = memo(CalendarPage);
 const MemoStatsPage = memo(StatsPage);
@@ -33,6 +34,7 @@ function Shell() {
   const [tab, setTab] = useState<TabKey>('calendar');
   const [toasts, setToasts] = useState<ToastMsg[]>([]);
   const toastId = useRef(0);
+  const [reminderMuted, setReminderMuted] = useState(false);
 
   useThemeEffect(state.settings.theme);
 
@@ -47,26 +49,82 @@ function Shell() {
   }, []);
 
   const goSettings = useCallback(() => setTab('settings'), []);
+  const goStats = useCallback(() => setTab('stats'), []);
+
+  /* ---------------- 记账提醒 ----------------
+     说明：这是**应用内**提醒，不是系统推送。
+     WebView 里没有原生通知能力，装推送插件要做原生改造；
+     与其挂一个「已开启提醒」却什么都不做的开关（之前就是），
+     不如把能做到的做扎实：打开 App、且过了设定时间、今天还没记 → 顶部提醒一句。 */
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    // 每分钟对一次表就够了；提醒要跨过设定时刻也能出现
+    const t = window.setInterval(() => setNowTick(Date.now()), 60_000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  const reminder = useMemo(() => {
+    const s = state.settings;
+    if (!s.reminderEnabled || reminderMuted) return null;
+    const today = todayKey();
+    if (state.entries[today]) return null; // 今天已记，不打扰
+    const [hh, mm] = (s.reminderTime || '20:00').split(':').map(Number);
+    const d = new Date(nowTick);
+    const dueAt = new Date(
+      d.getFullYear(),
+      d.getMonth(),
+      d.getDate(),
+      Number.isFinite(hh) ? hh : 20,
+      Number.isFinite(mm) ? mm : 0,
+      0,
+      0,
+    ).getTime();
+    if (d.getTime() < dueAt) return null;
+    return `今天（${dateLabel(today)}）还没记账`;
+  }, [state.settings, state.entries, reminderMuted, nowTick]);
 
   return (
     <div className="app">
       <main className="app-main">
-        {state.settings.reminderEnabled ? (
-          <p className="sr-only" aria-live="polite">
-            已开启记账提醒，每天 {state.settings.reminderTime}
-          </p>
+        {reminder ? (
+          <div className="reminder-bar" role="status">
+            <ClockIcon size={15} />
+            <span className="reminder-text">{reminder}</span>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setTab('calendar')}>
+              去记
+            </button>
+            <button
+              type="button"
+              className="icon-btn is-small"
+              aria-label="今天不再提醒"
+              onClick={() => setReminderMuted(true)}
+            >
+              <Icon icon={X} size={14} />
+            </button>
+          </div>
         ) : null}
 
         {tab === 'calendar' ? (
           <MemoCalendarPage
             state={state}
             onSave={store.upsert}
+            onSaveMany={store.upsertMany}
+            onDeleteMany={store.removeMany}
             onDelete={store.remove}
             onToast={pushToast}
+            onGoStats={goStats}
           />
         ) : null}
         {tab === 'stats' ? <MemoStatsPage state={state} /> : null}
-        {tab === 'goals' ? <MemoGoalsPage state={state} onGoSettings={goSettings} /> : null}
+        {tab === 'goals' ? (
+          <MemoGoalsPage
+            state={state}
+            onGoSettings={goSettings}
+            onAddGoal={store.addSavingsGoal}
+            onUpdateGoal={store.updateSavingsGoal}
+            onRemoveGoal={store.removeSavingsGoal}
+          />
+        ) : null}
         {tab === 'settings' ? <MemoSettingsPage store={store} /> : null}
       </main>
 

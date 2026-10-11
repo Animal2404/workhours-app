@@ -9,7 +9,9 @@ import { useMemo, useState } from 'react';
 import type { AppState } from '../lib/types';
 import {
   computeDayPay,
+  monthlyHistory,
   monthlyTotals,
+  summarizeAll,
   summarizeMonth,
   summarizeYear,
 } from '../lib/pay';
@@ -21,6 +23,8 @@ import {
   shiftMonth,
 } from '../lib/date';
 import { ChevronLeftIcon, ChevronRightIcon } from '../components/Icon';
+import { Calendar } from 'lucide';
+import { Empty } from '../components/ui';
 import {
   AnimatedCircularProgressBar,
   BlurFade,
@@ -29,7 +33,7 @@ import {
   ProgressBar,
 } from '../components/magic';
 
-type Mode = 'month' | 'year';
+type Mode = 'month' | 'year' | 'all';
 
 export function StatsPage({ state }: { state: AppState }) {
   const now = new Date();
@@ -44,6 +48,10 @@ export function StatsPage({ state }: { state: AppState }) {
   );
   const yearSummary = useMemo(() => summarizeYear(view.year, state), [view.year, state]);
   const months = useMemo(() => monthlyTotals(view.year, state), [view.year, state]);
+
+  // 「全部」= 不受月份限制的累计，以及逐月明细
+  const allSummary = useMemo(() => summarizeAll(state), [state]);
+  const history = useMemo(() => monthlyHistory(state), [state]);
 
   const monthBars = useMemo(() => {
     const keys = monthKeys(view.year, view.month0);
@@ -63,7 +71,7 @@ export function StatsPage({ state }: { state: AppState }) {
   const maxDayHours = Math.max(settings.dailyGoalHours || 8, ...monthBars.map((b) => b.hours), 1);
   const maxMonthNet = Math.max(...months.map((m) => m.net), 1);
 
-  const summary = mode === 'month' ? monthSummary : yearSummary;
+  const summary = mode === 'month' ? monthSummary : mode === 'year' ? yearSummary : allSummary;
 
   const goalPct =
     settings.monthlyGoalIncome > 0
@@ -79,8 +87,16 @@ export function StatsPage({ state }: { state: AppState }) {
 
   const shift = (delta: number) => {
     if (mode === 'month') setView((v) => shiftMonth(v.year, v.month0, delta));
-    else setView((v) => ({ ...v, year: v.year + delta }));
+    else if (mode === 'year') setView((v) => ({ ...v, year: v.year + delta }));
+    // 「全部」没有上一个/下一个的概念
   };
+
+  const rangeLabel =
+    mode === 'month'
+      ? monthLabel(view.year, view.month0)
+      : mode === 'year'
+        ? `${view.year}年`
+        : '全部记录';
 
   return (
     <div className="page page-enter">
@@ -88,7 +104,9 @@ export function StatsPage({ state }: { state: AppState }) {
         <div>
           <h1 className="topbar-title">统计</h1>
           <p className="topbar-sub">
-            {mode === 'month' ? monthLabel(view.year, view.month0) : `${view.year}年`}
+            {mode === 'all' && history.length > 0
+              ? `${rangeLabel} · 共 ${history.length} 个月`
+              : rangeLabel}
           </p>
         </div>
         <div className="mini-seg" role="tablist" aria-label="统计范围">
@@ -110,21 +128,30 @@ export function StatsPage({ state }: { state: AppState }) {
           >
             年
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'all'}
+            className={mode === 'all' ? 'is-on' : ''}
+            onClick={() => setMode('all')}
+          >
+            全部
+          </button>
         </div>
       </header>
 
-      {/* 时间切换 */}
-      <div className="row-between">
-        <button type="button" className="icon-btn" aria-label="上一个" onClick={() => shift(-1)}>
-          <ChevronLeftIcon size={18} />
-        </button>
-        <span style={{ fontSize: 14, fontWeight: 620 }}>
-          {mode === 'month' ? monthLabel(view.year, view.month0) : `${view.year}年`}
-        </span>
-        <button type="button" className="icon-btn" aria-label="下一个" onClick={() => shift(1)}>
-          <ChevronRightIcon size={18} />
-        </button>
-      </div>
+      {/* 时间切换（「全部」不需要） */}
+      {mode !== 'all' ? (
+        <div className="row-between">
+          <button type="button" className="icon-btn" aria-label="上一个" onClick={() => shift(-1)}>
+            <ChevronLeftIcon size={18} />
+          </button>
+          <span style={{ fontSize: 14, fontWeight: 620 }}>{rangeLabel}</span>
+          <button type="button" className="icon-btn" aria-label="下一个" onClick={() => shift(1)}>
+            <ChevronRightIcon size={18} />
+          </button>
+        </div>
+      ) : null}
 
       {/* 总额 */}
       <BlurFade style={LAZY_CARD}>
@@ -181,6 +208,48 @@ export function StatsPage({ state }: { state: AppState }) {
           </div>
         </section>
       </BlurFade>
+
+      {/* 全部：逐月明细（「上个月的工资这月看不到」的直接解法） */}
+      {mode === 'all' ? (
+        <BlurFade delay={40} style={LAZY_CARD}>
+          <section className="card">
+            <div className="card-title">
+              <span>逐月明细</span>
+              {history.length > 0 ? <span className="muted">点一行跳到那个月</span> : null}
+            </div>
+            {history.length === 0 ? (
+              <Empty
+                icon={Calendar}
+                title="还没有记录"
+                text="去日历记上第一天，这里就会按月列出来。"
+              />
+            ) : (
+              <div className="month-list">
+                {history.map((m) => (
+                  <button
+                    key={`${m.year}-${m.month0}`}
+                    type="button"
+                    className="month-row"
+                    onClick={() => {
+                      setView({ year: m.year, month0: m.month0 });
+                      setMode('month');
+                    }}
+                  >
+                    <span className="month-row-name">{m.label}</span>
+                    <span className="month-row-meta">
+                      {m.days} 天 · {formatHours(m.hours)}h
+                    </span>
+                    <span className="month-row-net">
+                      {settings.currency}
+                      {formatMoney(m.net, 0)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        </BlurFade>
+      ) : null}
 
       {/* 月度：每日柱状图 */}
       {mode === 'month' ? (

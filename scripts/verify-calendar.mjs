@@ -76,16 +76,29 @@ async function monthLabelNow() {
   });
 }
 async function goToMonth(year, month0) {
+  return goToMonthOn(page, year, month0);
+}
+
+/**
+ * 在**任意** page 上跳到指定月份（0 基月份）。
+ *
+ * 为什么要通用版：B9 / B10 这些用例自己 newContext 建了新页面，
+ * 不走主 page。它们断言的是 2026-09-25，而 App 默认打开「系统当月」——
+ * 跨月之后就会假红（本文件已经因此红过一次）。
+ */
+async function goToMonthOn(p, year, month0) {
   for (let i = 0; i < 80; i++) {
-    const lbl = await monthLabelNow();
+    const lbl = await p.evaluate(
+      () => document.querySelector('.cal-month')?.textContent ?? '',
+    );
     const m = /(\d{4})年(\d{1,2})月/.exec(lbl);
     if (!m) throw new Error('无法解析月份标题: ' + JSON.stringify(lbl));
     const diff = (year * 12 + month0) - (+m[1] * 12 + (+m[2] - 1));
-    if (diff === 0) { await page.waitForTimeout(230); return; }
-    await page.locator(diff > 0 ? '[aria-label="下一个月"]' : '[aria-label="上一个月"]').click();
-    await page.waitForTimeout(70);
+    if (diff === 0) { await p.waitForTimeout(230); return; }
+    await p.locator(diff > 0 ? '[aria-label="下一个月"]' : '[aria-label="上一个月"]').click();
+    await p.waitForTimeout(70);
   }
-  throw new Error(`goToMonth(${year},${month0}) 失败`);
+  throw new Error(`goToMonthOn(${year},${month0}) 失败`);
 }
 /** 取某天格子的完整信息 */
 async function cellInfo(dateKey) {
@@ -230,6 +243,9 @@ console.log('\n' + '='.repeat(74));
 console.log('B1. 核心：2026-09-25 的「中秋节」文字真的在 DOM 里且可见');
 console.log('='.repeat(74));
 {
+  // 必须显式跳到 2026-09：App 默认打开的是「系统当月」，
+  // 下面整段断言都锚在 2026-09-25 上。不跳就会跨月假红（真的发生过）。
+  await goToMonth(2026, 8);
   const c = await cellInfo('2026-09-25');
   ok('2026-09-25 格子存在', !!c);
   eq('格子 classes', c.classes.filter((x) => x !== 'day').sort(), ['has-holiday']);
@@ -535,6 +551,8 @@ console.log('='.repeat(74));
   dpage.on('pageerror', (e) => derr.push(String(e.message)));
   await dpage.goto(BASE, { waitUntil: 'load' });
   await dpage.waitForSelector('.cal-grid'); await dpage.waitForTimeout(500);
+  // 自建页面，同样要自己跳到锚点月份
+  await goToMonthOn(dpage, 2026, 8);
   const dh = await dpage.evaluate(() => {
     const c = document.querySelector('.day[data-date="2026-09-25"]');
     const hl = c?.querySelector('.day-holiday');
@@ -572,6 +590,8 @@ console.log('='.repeat(74));
     const np = await nctx.newPage();
     await np.goto(BASE, { waitUntil: 'load' });
     await np.waitForSelector('.cal-grid'); await np.waitForTimeout(400);
+    // 这个页面是自己建的，得自己跳到锚点月份（断言锚在 2026-09-25 上）
+    await goToMonthOn(np, 2026, 8);
     const r = await np.evaluate(() => {
       const cell = document.querySelector('.day[data-date="2026-09-25"]');
       const hl = cell?.querySelector('.day-holiday');
@@ -650,6 +670,11 @@ console.log('='.repeat(74));
     const hp = await hctx.newPage();
     await hp.goto(BASE, { waitUntil: 'load' });
     await hp.waitForSelector('.cal-grid'); await hp.waitForTimeout(450);
+    // 跳到锚点月份；本用例要测的是「首屏不滚动时是否可见」，
+    // 所以跳完必须把滚动位置归零，否则测的就不是首屏了。
+    await goToMonthOn(hp, 2026, 8);
+    await hp.evaluate(() => window.scrollTo(0, 0));
+    await hp.waitForTimeout(250);
     const r = await hp.evaluate(() => {
       const lbl = document.querySelector('.day[data-date="2026-09-25"] .day-holiday');
       const bar = document.querySelector('.tabbar').getBoundingClientRect();

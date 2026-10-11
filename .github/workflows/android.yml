@@ -57,6 +57,9 @@ jobs:
       - name: 工资引擎自检
         run: npm run check
 
+      - name: 存款目标 / 累计 / 老数据迁移自检
+        run: npm run check:savings
+
       - name: 节假日数据自检
         run: npm run check:holidays
 

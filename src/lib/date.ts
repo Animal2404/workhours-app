@@ -27,6 +27,27 @@ export function isSameDay(a: string, b: string): boolean {
   return a === b;
 }
 
+/** 日期键加减天数（n 可为负）；用本地时区，跨月跨年自动进位 */
+export function addDaysKey(key: string, n: number): string {
+  const d = fromKey(key);
+  d.setDate(d.getDate() + n);
+  return toKey(d);
+}
+
+/** 两个日期键相差的天数（b − a）。同一天为 0 */
+export function daysBetweenKeys(a: string, b: string): number {
+  // 用 UTC 毫秒差除以一天，避开夏令时导致的小数
+  const [ay, am, ad] = a.split('-').map(Number);
+  const [by, bm, bd] = b.split('-').map(Number);
+  return Math.round((Date.UTC(by, bm - 1, bd) - Date.UTC(ay, am - 1, ad)) / 86400000);
+}
+
+/** 日期键所在月的序号（用于按月分组） */
+export function monthIndexOf(key: string): { year: number; month0: number } {
+  const d = fromKey(key);
+  return { year: d.getFullYear(), month0: d.getMonth() };
+}
+
 /** 该月的天数 */
 export function daysInMonth(year: number, month0: number): number {
   return new Date(year, month0 + 1, 0).getDate();

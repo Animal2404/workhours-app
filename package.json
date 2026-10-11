@@ -10,7 +10,8 @@
     "preview": "vite preview --host 127.0.0.1 --port 4173",
     "typecheck": "tsc --noEmit",
     "check": "node scripts/check-pay.mjs",
-    "verify": "npm run check && npm run check:holidays && npm run check:android && npm run typecheck && npm run build",
+    "check:savings": "node scripts/check-savings.mjs",
+    "verify": "npm run check && npm run check:savings && npm run check:holidays && npm run check:android && npm run typecheck && npm run build",
     "cap:add": "cap add android",
     "cap:sync": "cap sync android",
     "android:open": "cap open android",
@@ -20,7 +21,8 @@
     "check:fouc": "node scripts/fouc-check.mjs",
     "check:holidays": "node scripts/check-holidays.mjs",
     "check:tabbar": "node scripts/tabbar-center-check.mjs",
-    "check:holiday-ui": "node scripts/holiday-check.mjs"
+    "check:holiday-ui": "node scripts/holiday-check.mjs",
+    "check:features": "node scripts/newfeatures-check.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",
