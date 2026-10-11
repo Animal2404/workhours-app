@@ -36,6 +36,12 @@ function Shell() {
   const toastId = useRef(0);
   const [reminderMuted, setReminderMuted] = useState(false);
 
+  /* 访问过的 tab 保活（见下方 .tabpanel 注释） */
+  const [visited, setVisited] = useState<Set<TabKey>>(() => new Set<TabKey>(['calendar']));
+  useEffect(() => {
+    setVisited((prev) => (prev.has(tab) ? prev : new Set(prev).add(tab)));
+  }, [tab]);
+
   useThemeEffect(state.settings.theme);
 
   const pushToast = useCallback((text: string, tone: ToastTone = 'info') => {
@@ -104,28 +110,49 @@ function Shell() {
           </div>
         ) : null}
 
-        {tab === 'calendar' ? (
-          <MemoCalendarPage
-            state={state}
-            onSave={store.upsert}
-            onSaveMany={store.upsertMany}
-            onDeleteMany={store.removeMany}
-            onDelete={store.remove}
-            onToast={pushToast}
-            onGoStats={goStats}
-          />
+        {/* 页面保活：首次访问后**不再卸载**，切回来只是把 display 换回去。
+            ------------------------------------------------------------
+            以前是 `{tab === 'x' ? <Page/> : null}` —— 每次切 tab 都卸载再挂载，
+            等于把整页的 DOM 重建 + 重新布局一遍。
+            CDP 采样显示切 tab 的开销里 **61.9% 是 (program)**
+            （浏览器自己的 style/layout/paint），不是 JS —— 正是整页重建的代价。
+            现在用 hidden（display:none）：非当前页完全不参与布局与绘制，
+            切回来直接复用已有 DOM。内容切换只补一个 160ms 的**纯 opacity**
+            淡入（合成层动画，不触发 layout/paint），既保住了过渡感又不掉帧。 */}
+        {visited.has('calendar') ? (
+          <div className="tabpanel" hidden={tab !== 'calendar'}>
+            <MemoCalendarPage
+              state={state}
+              onSave={store.upsert}
+              onSaveMany={store.upsertMany}
+              onDeleteMany={store.removeMany}
+              onDelete={store.remove}
+              onToast={pushToast}
+              onGoStats={goStats}
+            />
+          </div>
         ) : null}
-        {tab === 'stats' ? <MemoStatsPage state={state} /> : null}
-        {tab === 'goals' ? (
-          <MemoGoalsPage
-            state={state}
-            onGoSettings={goSettings}
-            onAddGoal={store.addSavingsGoal}
-            onUpdateGoal={store.updateSavingsGoal}
-            onRemoveGoal={store.removeSavingsGoal}
-          />
+        {visited.has('stats') ? (
+          <div className="tabpanel" hidden={tab !== 'stats'}>
+            <MemoStatsPage state={state} />
+          </div>
         ) : null}
-        {tab === 'settings' ? <MemoSettingsPage store={store} /> : null}
+        {visited.has('goals') ? (
+          <div className="tabpanel" hidden={tab !== 'goals'}>
+            <MemoGoalsPage
+              state={state}
+              onGoSettings={goSettings}
+              onAddGoal={store.addSavingsGoal}
+              onUpdateGoal={store.updateSavingsGoal}
+              onRemoveGoal={store.removeSavingsGoal}
+            />
+          </div>
+        ) : null}
+        {visited.has('settings') ? (
+          <div className="tabpanel" hidden={tab !== 'settings'}>
+            <MemoSettingsPage store={store} />
+          </div>
+        ) : null}
       </main>
 
       <TabBar active={tab} onChange={setTab} />

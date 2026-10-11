@@ -182,7 +182,7 @@ await writeFile(
     <color name="colorPrimaryDark">#4F46E5</color>
     <color name="colorAccent">#4F8DFF</color>
     <!-- App 背景色，需与 tokens.css 里 bg 变量的浅色值一致 -->
-    <color name="app_background">#F4F4F7</color>
+    <color name="app_background">#FAFAFA</color>
     <!-- 闪屏底色，需与 drawable/splash.png 的底色一致 -->
     <color name="splash_background">${BRAND}</color>
 </resources>
@@ -202,7 +202,7 @@ await writeFile(
   `<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- App 背景色（深色），需与 tokens.css 里 bg 变量的深色值一致 -->
-    <color name="app_background">#0F0F11</color>
+    <color name="app_background">#0A0A0A</color>
 </resources>
 `,
   'utf8',

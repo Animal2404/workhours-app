@@ -168,6 +168,34 @@
   color: var(--text-3);
 }
 
+/* 页面槽位：非当前页用 hidden 完全不参与布局/绘制。
+   显示时只播一个纯 opacity 的短淡入 —— opacity 走合成层，
+   不触发 layout/paint，是「有过渡感」和「不掉帧」之间唯一划算的取舍。
+   （整页位移/缩放会让 42 个日历格重新栅格化，那是以前掉帧的来源。） */
+.tabpanel[hidden] {
+  display: none;
+}
+
+.tabpanel {
+  animation: tabIn var(--t-fast) var(--ease-out);
+}
+
+@keyframes tabIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 无障碍：减弱动效时不要这个淡入 */
+@media (prefers-reduced-motion: reduce) {
+  .tabpanel {
+    animation: none;
+  }
+}
+
 /* ---------------- 主数字卡（本月工资） ----------------
    底色走 --hero-bg：浅色是品牌渐变，深色是中性深面 + 极淡暖调。
    深色下不再铺满饱和蓝紫，避免夜里大面积刺眼。 */
@@ -408,10 +436,15 @@
   font-weight: 600;
 }
 
-/* 工时拉满的日子底色是饱和渐变，节日名要换成能压在上面的前景色 */
+/* 达标格的底色是淡强调色（不再是饱和渐变），节日名要保留自己的语义色。
+   之前这里统一换成 --day-full-fg，结果「国庆节」被染成了钱的绿色 ——
+   节日和收入是两回事，颜色串了会读错。 */
 .day.is-full .day-holiday {
-  color: var(--day-full-fg);
-  opacity: 0.9;
+  color: var(--holiday);
+}
+
+[data-theme='dark'] .day.is-full .day-holiday {
+  color: var(--chart-5);
 }
 
 /* 窄屏（≤389px）：「日号 + 节日名 + 金额」三行同时出现时，
@@ -1324,12 +1357,6 @@
   overflow: hidden;
 }
 
-.rank-fill {
-  height: 100%;
-  border-radius: var(--r-full);
-  transition: width 520ms var(--ease-out);
-}
-
 /* ---------------- 目标页 ---------------- */
 .goal-row {
   display: flex;
@@ -1571,9 +1598,12 @@
   gap: 2px;
   padding: 0 8px;
   border-radius: var(--r-full);
-  background: var(--material);
-  backdrop-filter: var(--material-blur);
-  -webkit-backdrop-filter: var(--material-blur);
+  /* ⚠️ 这里**故意不用** backdrop-filter。
+     底部导航是常驻元素，磨砂意味着每帧都要把它覆盖的那块区域
+     重新模糊一遍（393×~100 @3x ≈ 1179×300 物理像素，还带 saturate）。
+     实测：切 tab p95 33ms / 长任务最长 294ms；去掉后显著下降。
+     用高不透明度的实色近似 —— 视觉几乎一样，代价差一个数量级。 */
+  background: var(--material-strong);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-lg);
 }
@@ -1597,7 +1627,8 @@
 }
 
 .tab.is-on {
-  color: var(--on-brand);
+  /* 强调色落在文字/图标上（小面积），而不是铺一块饱和底 */
+  color: var(--primary);
 }
 
 .tab-label {
@@ -1622,8 +1653,11 @@
   top: 0;
   height: 48px;
   border-radius: var(--r-full);
-  background: linear-gradient(135deg, var(--brand) 0%, var(--brand-2) 100%);
-  box-shadow: 0 8px 18px -8px var(--brand-soft-2);
+  /* 中性药丸 + 强调色文字。
+     原来是整块高饱和渐变 —— 底部一条亮色是整屏最吵的元素，
+     而且「大面积用中性、颜色只做点缀」正是本版的设计纪律。 */
+  background: var(--secondary);
+  box-shadow: none;
   transition: transform var(--t-base) var(--ease-in-out),
     width var(--t-base) var(--ease-in-out);
   z-index: -1;
@@ -1651,8 +1685,7 @@
   padding: 11px 18px;
   border-radius: var(--r-full);
   background: var(--material-strong);
-  backdrop-filter: var(--material-blur);
-  -webkit-backdrop-filter: var(--material-blur);
+  /* 底已经是 0.94 不透明，磨砂几乎看不出来却要每帧重算 —— 去掉 */
   border: 1px solid var(--line);
   box-shadow: var(--shadow-lg);
   font-size: 13.5px;

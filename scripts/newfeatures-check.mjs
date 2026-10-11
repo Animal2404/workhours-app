@@ -164,7 +164,7 @@ console.log('\n[2] 累计收入与逐月明细');
   // （曾经截到 ¥705，而 480+320=800，看着像算错了）
   await page.waitForTimeout(1400);
 
-  const sub = await page.locator('.topbar-sub').first().innerText();
+  const sub = await page.locator('.tabpanel:not([hidden]) .topbar-sub').first().innerText();
   console.log(`     统计页副标题: ${sub.trim()}`);
   check('显示共 2 个月', /2\s*个月/.test(sub), true);
 
@@ -188,7 +188,7 @@ console.log('\n[2] 累计收入与逐月明细');
   await page.locator('.month-row').nth(1).click();
   await page.waitForTimeout(400);
   check('点明细跳回 8 月的月度视图', await page.locator('.mini-seg button:has-text("月")').first().getAttribute('aria-selected'), 'true');
-  const monthLbl = await page.locator('.topbar-sub').first().innerText();
+  const monthLbl = await page.locator('.tabpanel:not([hidden]) .topbar-sub').first().innerText();
   check('确实停在 2026年8月', /2026年8月/.test(monthLbl), true);
 }
 
@@ -339,7 +339,8 @@ console.log('\n[5] 老版本数据兼容');
   check('老数据照常显示累计 198（9h×22）', /198/.test(heroTotal), true);
   await goTab('目标');
   await page.waitForTimeout(300);
-  check('目标页正常渲染（无 savingsGoals 也不炸）', await page.locator('.page').count(), 1);
+  // 页面保活后 DOM 里会有多个 .page（隐藏的那些），只数当前可见的
+  check('目标页正常渲染（无 savingsGoals 也不炸）', await page.locator('.tabpanel:not([hidden]) .page').count(), 1);
   const saved = await readState();
   check('回写后仍保留老时薪', saved.settings.hourlyRate, 22);
 }

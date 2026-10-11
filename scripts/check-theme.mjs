@@ -1,12 +1,15 @@
 /* ============================================================
-   深色 / 浅色主题配色自检
+   主题配色自检
    ------------------------------------------------------------
-   两件事：
-   1. WCAG 对比度：直接**解析 src/styles/tokens.css**，
-      半透明层按 alpha 合成到底色后再算比值 —— 拿 token 原值直接算会偏乐观。
-      解析真实文件而不是抄一份常量，这样改了 token 这个门就会跟着动。
-   2. 色相纪律：深色下统计「参与大面积着色的色相个数」，
-      超过阈值就报警 —— 一张屏上五颜六色就是这么来的。
+   直接**解析 src/styles/tokens.css**，不抄常量 —— 抄一份就会漂移。
+
+   守三件事：
+   1. **大面积必须无彩**（shadcn 的核心纪律）：background / card /
+      muted / hero 卡底 这些铺满屏的角色，彩度必须接近 0。
+      上一版深色被吐槽就是拿高饱和金色铺大面积 —— 这条把它变成可测规则。
+   2. **强调色只做小面积点缀**：primary 不允许出现在大面积底色角色里。
+   3. WCAG 对比度：半透明按 alpha 合成后再算，深色浅色各测一遍。
+   4. 首帧底色四处一致（tokens.css / index.html / store.tsx / Android 资源）。
 
    跑：node scripts/check-theme.mjs
    ============================================================ */
@@ -48,49 +51,44 @@ function blockOf(selector) {
 
 function vars(block) {
   const out = {};
-  for (const m of block.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) {
-    out[m[1]] = m[2].trim();
-  }
+  for (const m of block.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) out[m[1]] = m[2].trim();
   return out;
 }
 
-const light = vars(blockOf("[data-theme='light']"));
+const light = vars(blockOf(":root,\n[data-theme='light']"));
 const dark = vars(blockOf("[data-theme='dark']"));
+
+/** 解析 var() 间接引用（最多 6 层），让 var(--day-full-bg) → var(--accent) → 真值 */
+function resolve(name, table, depth = 0) {
+  if (depth > 6) throw new Error(`${name} 的 var() 引用成环`);
+  const raw = table[name];
+  if (raw === undefined) throw new Error(`缺少 ${name}`);
+  const m = /^var\(\s*(--[\w-]+)\s*\)$/.exec(raw);
+  if (m) return resolve(m[1], table, depth + 1);
+  return raw;
+}
 
 /* ---------------- 颜色工具 ---------------- */
 function parseColor(v) {
-  const s = String(v).trim();
+  const s = String(resolve0(v)).trim();
   let m = /^#([0-9a-f]{6})$/i.exec(s);
-  if (m) {
-    const h = m[1];
-    return { rgb: [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)), a: 1 };
-  }
+  if (m) return { rgb: [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)), a: 1 };
   m = /^#([0-9a-f]{3})$/i.exec(s);
-  if (m) {
-    return { rgb: m[1].split('').map((c) => parseInt(c + c, 16)), a: 1 };
-  }
+  if (m) return { rgb: m[1].split('').map((c) => parseInt(c + c, 16)), a: 1 };
   m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(s);
-  if (m) {
-    return { rgb: [+m[1], +m[2], +m[3]], a: m[4] === undefined ? 1 : +m[4] };
-  }
+  if (m) return { rgb: [+m[1], +m[2], +m[3]], a: m[4] === undefined ? 1 : +m[4] };
   throw new Error(`无法解析颜色: ${s}`);
 }
+// parseColor 可能被传入已经解析过的字符串，保留一个空壳
+const resolve0 = (v) => v;
 
-/** 取渐变两端的颜色（深色下这些渐变都是两段，取端点即可覆盖最坏情况） */
+const comp = (fg, bgRgb) => fg.rgb.map((c, i) => c * fg.a + bgRgb[i] * (1 - fg.a));
+
 function gradientEnds(v) {
-  const colors = [...String(v).matchAll(/#[0-9a-f]{6}|rgba?\([^)]*\)/gi)]
-    .map((m) => m[0])
-    .filter(Boolean);
+  const colors = [...String(v).matchAll(/#[0-9a-f]{6}|rgba?\([^)]*\)/gi)].map((m) => m[0]);
   if (!colors.length) throw new Error(`无法解析渐变: ${v}`);
   return [parseColor(colors[0]), parseColor(colors[colors.length - 1])];
 }
-
-/** 把 fg（可含 alpha）合成到不透明底色 bgRgb（原始数组）上 */
-const comp = (fg, bgRgb) => fg.rgb.map((c, i) => c * fg.a + bgRgb[i] * (1 - fg.a));
-
-/** 渐变两端的颜色，各自合成到底色上 → 得到不透明 rgb 数组 */
-const stopsOf = (v, baseRgb) =>
-  gradientEnds(v).map((c) => comp(c, baseRgb));
 
 const lum = ([r, g, b]) => {
   const f = (c) => {
@@ -106,12 +104,8 @@ const ratio = (a, b) => {
 const r2 = (n) => Math.round(n * 100) / 100;
 const rgbStr = (c) => `rgb(${c.map((v) => Math.round(v)).join(',')})`;
 
-/**
- * 检查一组「文字色 × 若干候选底色」的对比度，取最坏的一个。
- * 半透明文字会先按 alpha 合成再算 —— 直接用 token 原值算会偏乐观。
- */
-function pair(tag, label, fgVar, bgRgbs, need) {
-  const fg = parseColor(fgVar);
+function pair(tag, label, fgRaw, bgRgbs, need) {
+  const fg = parseColor(fgRaw);
   let worst = Infinity;
   let worstBg = null;
   for (const bgRgb of bgRgbs) {
@@ -125,149 +119,173 @@ function pair(tag, label, fgVar, bgRgbs, need) {
   if (ok) pass++;
   else fails.push(`[${tag}] ${label} ${r2(worst)}:1`);
   console.log(
-    `  ${ok ? '✓' : '✗'} [${tag}] ${label.padEnd(28)} ${r2(worst).toFixed(2)}:1 (需 ${need})  ${rgbStr(comp(fg, worstBg))} on ${rgbStr(worstBg)}`,
+    `  ${ok ? '✓' : '✗'} [${tag}] ${label.padEnd(26)} ${r2(worst).toFixed(2)}:1 (需 ${need})`,
   );
 }
 
-console.log('\n═══ 深色主题对比度（解析 tokens.css 实测）═══');
+/** 彩度代理：max−min（0 = 纯灰）。用来判定「大面积是不是无彩」 */
+const chroma = (v) => {
+  const s = String(v).trim();
+  // 渐变取两端里最花的那一端
+  if (/gradient/i.test(s)) {
+    return Math.max(...gradientEnds(s).map((c) => Math.max(...c.rgb) - Math.min(...c.rgb)));
+  }
+  const { rgb } = parseColor(s);
+  return Math.max(...rgb) - Math.min(...rgb);
+};
+
+/* ============================================================
+   1. 大面积必须无彩（shadcn 纪律）
+   ============================================================ */
+console.log('\n═══ 1. 大面积底色必须无彩（chroma ≤ 20/255）═══');
 {
-  const bg = parseColor(dark['--bg']).rgb;
-  const surface = parseColor(dark['--surface']);
-  const surfRgb = comp(surface, bg);
-
-  console.log('\n[1] 正文层级');
-  pair('深色', '正文 / 卡片', dark['--text'], [surfRgb], 4.5);
-  pair('深色', '次要文字 / 卡片', dark['--text-2'], [surfRgb], 4.5);
-  pair('深色', '弱化文字 / 卡片', dark['--text-3'], [surfRgb], 3);
-
-  console.log('\n[2] 英雄卡（渐变两端都要达标）');
-  const heroRgb = stopsOf(dark['--hero-bg'], bg);
-  pair('深色', '主数字 / 卡底', dark['--hero-fg'], heroRgb, 4.5);
-  const pillStops = heroRgb.map((h) => comp(parseColor(dark['--hero-pill']), h));
-  pair('深色', '累计文字 / 药丸', dark['--hero-fg'], pillStops, 4.5);
-  pair('深色', '涨幅 / 药丸', dark['--hero-up'], pillStops, 4.5);
-  pair('深色', '跌幅 / 药丸', dark['--hero-down'], pillStops, 4.5);
-
-  console.log('\n[3] 日历达标格子（渐变两端）');
-  const dayRgb = stopsOf(dark['--day-full-bg'], bg);
-  pair('深色', '日号货币 / 格底', dark['--day-full-fg'], dayRgb, 4.5);
-
-  console.log('\n[4] 语义色');
-  pair('深色', '节日名 / 卡片', dark['--holiday'], [surfRgb], 4.5);
-  pair('深色', '工资金额 / 卡片', dark['--money'], [surfRgb], 4.5);
-  pair('深色', '扣款 / 卡片', dark['--danger'], [surfRgb], 4.5);
-  pair('深色', '加班 / 卡片', dark['--warn'], [surfRgb], 3);
-
-  console.log('\n[5] 主色上的文字（选中态）');
-  pair('深色', 'on-brand / brand', dark['--on-brand'], [parseColor(dark['--brand']).rgb], 4.5);
+  const LARGE = ['--background', '--card', '--popover', '--muted', '--secondary', '--hero-bg'];
+  const LIMIT = 20;
+  for (const [tag, table] of [
+    ['浅色', light],
+    ['深色', dark],
+  ]) {
+    for (const name of LARGE) {
+      const c = chroma(resolve(name, table));
+      const ok = c <= LIMIT;
+      if (ok) pass++;
+      else fails.push(`[${tag}] ${name} 彩度 ${c}`);
+      console.log(`  ${ok ? '✓' : '✗'} [${tag}] ${name.padEnd(14)} 彩度 ${String(c).padStart(3)} / ${LIMIT}`);
+    }
+  }
 }
 
-console.log('\n═══ 浅色主题对比度 ═══');
+/* ============================================================
+   1b. 大面积上的「叠加层」也必须克制
+   ------------------------------------------------------------
+   主数字卡 = --hero-bg（中性渐变）+ ::after 的 --hero-glow 径向叠加。
+   只查 --hero-bg 会漏掉叠加层 —— 上一版就是这样漏过去的：
+   底色是中性，但 0.22 的强调色辉光铺在整张卡上，看起来还是绿卡。
+   ============================================================ */
+console.log('\n═══ 1b. 大面积叠加层（hero 辉光）必须克制 ═══');
 {
-  const bg = parseColor(light['--bg']).rgb;
-  const surface = parseColor(light['--surface']);
-  const surfRgb = comp(surface, bg);
-  const heroRgb = stopsOf(light['--hero-bg'], bg);
-  pair('浅色', '正文 / 卡片', light['--text'], [surfRgb], 4.5);
-  pair('浅色', '次要文字 / 卡片', light['--text-2'], [surfRgb], 4.5);
-  pair('浅色', '主数字 / 卡底', light['--hero-fg'], heroRgb, 4.5);
-  const pillStops = heroRgb.map((h) => comp(parseColor(light['--hero-pill']), h));
-  pair('浅色', '累计文字 / 药丸', light['--hero-fg'], pillStops, 4.5);
-  pair('浅色', '涨幅 / 药丸', light['--hero-up'], pillStops, 4.5);
-  pair('浅色', '节日名 / 卡片', light['--holiday'], [surfRgb], 4.5);
-  pair('浅色', '工资金额 / 卡片', light['--money'], [surfRgb], 4.5);
-  pair('浅色', 'on-brand / brand', light['--on-brand'], [parseColor(light['--brand']).rgb], 4.5);
+  const LIMIT = 30;
+  for (const [tag, table] of [
+    ['浅色', light],
+    ['深色', dark],
+  ]) {
+    const bg = parseColor(resolve('--background', table)).rgb;
+    // 辉光合成到主数字卡最亮那一端
+    const heroTop = comp(gradientEnds(resolve('--hero-bg', table))[0], bg);
+    const glow = parseColor(resolve('--hero-glow', table));
+    const composited = comp(glow, heroTop);
+    const c = Math.max(...composited) - Math.min(...composited);
+    const ok = c <= LIMIT;
+    if (ok) pass++;
+    else fails.push(`[${tag}] hero 辉光合成后彩度 ${c}`);
+    console.log(
+      `  ${ok ? '✓' : '✗'} [${tag}] 辉光 alpha=${glow.a} 合成后彩度 ${String(c).padStart(3)} / ${LIMIT}  ${rgbStr(composited)}`,
+    );
+  }
 }
 
-/* ---------------- 首帧背景色：四处必须一致 ---------------- */
-console.log('\n═══ 首帧背景色一致性 ═══');
+/* ============================================================
+   2. 强调色不得铺大面积
+   ============================================================ */
+console.log('\n═══ 2. 强调色只做小面积点缀 ═══');
 {
-  // 同一件事写在四个地方：
-  //   tokens.css(--bg) / index.html(内联首帧脚本 + theme-color meta)
-  //   store.tsx(换主题时更新行内样式) / Android values(-night)/colors.xml
-  // 改一处漏一处就会出现「启动闪一下别的颜色」或状态栏色不对。
-  // （真的踩过：改 tokens.css 忘了 index.html/store.tsx）
+  // primary 的值不允许出现在大面积角色的定义里（直接或经 var 间接）
+  const LARGE = ['--background', '--card', '--popover', '--hero-bg', '--muted'];
+  for (const [tag, table] of [
+    ['浅色', light],
+    ['深色', dark],
+  ]) {
+    const p = resolve('--primary', table).toUpperCase();
+    const bad = LARGE.filter((n) => resolve(n, table).toUpperCase().includes(p));
+    check(`[${tag}] primary(${resolve('--primary', table)}) 未用于大面积底色`, bad, []);
+  }
+  // accent 是「淡色底」，彩度也必须有上限（它是小面积，但仍不该是高饱和）
+  for (const [tag, table] of [
+    ['浅色', light],
+    ['深色', dark],
+  ]) {
+    const c = chroma(resolve('--accent', table));
+    const ok = c <= 40;
+    if (ok) pass++;
+    else fails.push(`[${tag}] --accent 彩度 ${c}`);
+    console.log(`  ${ok ? '✓' : '✗'} [${tag}] --accent 彩度 ${String(c).padStart(3)} / 40（淡色底，允许略高）`);
+  }
+}
+
+/* ============================================================
+   3. 对比度
+   ============================================================ */
+console.log('\n═══ 3. WCAG 对比度 ═══');
+for (const [tag, table] of [
+  ['浅色', light],
+  ['深色', dark],
+]) {
+  const bg = parseColor(resolve('--background', table)).rgb;
+  const surf = comp(parseColor(resolve('--card', table)), bg);
+  const heroRgb = gradientEnds(resolve('--hero-bg', table)).map((c) => comp(c, bg));
+  const pill = heroRgb.map((h) => comp(parseColor(resolve('--hero-pill', table)), h));
+  const dayRgb = gradientEnds(resolve('--day-full-bg', table)).map((c) => comp(c, bg));
+
+  console.log(`\n[${tag}]`);
+  pair(tag, '正文 / 卡片', resolve('--foreground', table), [surf], 4.5);
+  pair(tag, '次要文字 / 卡片', resolve('--muted-foreground', table), [surf], 4.5);
+  pair(tag, '弱化文字 / 卡片', resolve('--subtle-foreground', table), [surf], 3);
+  pair(tag, '次要文字 / 页面底', resolve('--muted-foreground', table), [bg], 4.5);
+  pair(tag, '主数字 / 主数字卡', resolve('--hero-fg', table), heroRgb, 4.5);
+  pair(tag, '累计文字 / 药丸', resolve('--hero-fg', table), pill, 4.5);
+  pair(tag, '涨幅 / 药丸', resolve('--hero-up', table), pill, 4.5);
+  pair(tag, '跌幅 / 药丸', resolve('--hero-down', table), pill, 4.5);
+  pair(tag, '达标格文字 / 格底', resolve('--day-full-fg', table), dayRgb, 4.5);
+  pair(tag, 'on-primary / primary', resolve('--primary-foreground', table), [parseColor(resolve('--primary', table)).rgb], 4.5);
+  pair(tag, '工资数字 / 卡片', resolve('--chart-1', table), [surf], 4.5);
+  pair(tag, '加班 / 卡片', resolve('--chart-2', table), [surf], 3);
+  pair(tag, '扣款 / 卡片', resolve('--chart-3', table), [surf], 4.5);
+  pair(tag, '节日 / 卡片', resolve('--chart-5', table), [surf], 4.5);
+  pair(tag, 'on-destructive / destructive', resolve('--destructive-foreground', table), [parseColor(resolve('--destructive', table)).rgb], 4.5);
+}
+
+/* ============================================================
+   4. 首帧底色四处一致
+   ============================================================ */
+console.log('\n═══ 4. 首帧背景色一致性 ═══');
+{
   const norm = (s) => s.trim().toUpperCase();
-  const lightBg = norm(light['--bg']);
-  const darkBg = norm(dark['--bg']);
-
+  const lightBg = norm(resolve('--background', light));
+  const darkBg = norm(resolve('--background', dark));
   const html = readFileSync(join(root, 'index.html'), 'utf-8');
   const store = readFileSync(join(root, 'src/lib/store.tsx'), 'utf-8');
 
-  const htmlLight = [...html.matchAll(/'(#[0-9a-fA-F]{6})'\s*:\s*'#[0-9a-fA-F]{6}'/g)];
-  const hasHtmlDark = html.toUpperCase().includes(`'${darkBg}'`);
-  const hasHtmlLight = html.toUpperCase().includes(`'${lightBg}'`);
-  const hasStoreDark = store.toUpperCase().includes(`'${darkBg}'`);
-  const hasStoreLight = store.toUpperCase().includes(`'${lightBg}'`);
+  console.log(`  tokens.css --background  浅色 ${lightBg} / 深色 ${darkBg}`);
+  check('index.html 含深色 bg', html.toUpperCase().includes(`'${darkBg}'`), true);
+  check('index.html 含浅色 bg', html.toUpperCase().includes(`'${lightBg}'`), true);
+  check('store.tsx 含深色 bg', store.toUpperCase().includes(`'${darkBg}'`), true);
+  check('store.tsx 含浅色 bg', store.toUpperCase().includes(`'${lightBg}'`), true);
 
-  console.log(`  tokens.css  --bg   浅色 ${lightBg} / 深色 ${darkBg}`);
-  check('index.html 首帧脚本含深色 bg', hasHtmlDark, true);
-  check('index.html 首帧脚本含浅色 bg', hasHtmlLight, true);
-  check('store.tsx 换主题时含深色 bg', hasStoreDark, true);
-  check('store.tsx 换主题时含浅色 bg', hasStoreLight, true);
-
-  // 旧值不该还残留在任何地方（防「改了一半」）
-  for (const stale of ['#101012', '#4F8DFF']) {
-    const inHtml = html.toUpperCase().includes(stale);
-    const inStore = store.toUpperCase().includes(stale);
-    check(`index.html 不残留旧色 ${stale}`, inHtml, false);
-    check(`store.tsx 不残留旧色 ${stale}`, inStore, false);
+  for (const stale of ['#101012', '#0F0F11', '#4F8DFF', '#D9A441']) {
+    check(`index.html 不残留旧色 ${stale}`, html.toUpperCase().includes(stale), false);
   }
-  void htmlLight;
+  for (const stale of ['#101012', '#0F0F11']) {
+    check(`store.tsx 不残留旧色 ${stale}`, store.toUpperCase().includes(stale), false);
+  }
 }
 
-/* ---------------- 色相纪律 ---------------- */
-console.log('\n═══ 色相纪律（深色）═══');
+/* ============================================================
+   5. Android 资源与本文件一致
+   ============================================================ */
+console.log('\n═══ 5. Android 窗口底色一致 ═══');
 {
-  // 参与「大面积着色」的角色：卡底/格子底/主色/节日/money
-  /** 传 rgb 数组，返回色相角度；近灰的返回 'neutral' */
-  const hueOfRgb = ([r, g, b]) => {
-    r /= 255;
-    g /= 255;
-    b /= 255;
-    const mx = Math.max(r, g, b);
-    const mn = Math.min(r, g, b);
-    if (mx - mn < 0.06) return 'neutral'; // 近灰 → 不算一个色相
-    const d = mx - mn;
-    let h = 0;
-    if (mx === r) h = ((g - b) / d) % 6;
-    else if (mx === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    return Math.round(((h * 60) + 360) % 360);
+  const norm = (s) => s.trim().toUpperCase();
+  const lightBg = norm(resolve('--background', light));
+  const darkBg = norm(resolve('--background', dark));
+  const readXml = (p) => {
+    try {
+      return readFileSync(join(root, p), 'utf-8').toUpperCase();
+    } catch {
+      return '';
+    }
   };
-
-  const big = {
-    英雄卡底: dark['--hero-bg'],
-    达标格子: dark['--day-full-bg'],
-    主色: dark['--brand'],
-    节日名: dark['--holiday'],
-    工资金额: dark['--money'],
-  };
-  const hues = [];
-  for (const [k, v] of Object.entries(big)) {
-    // 渐变取两端，纯色取本身；统一合成到最底层背景上再判色相
-    const rgbs = /gradient/.test(v)
-      ? stopsOf(v, parseColor(dark['--bg']).rgb)
-      : [comp(parseColor(v), parseColor(dark['--bg']).rgb)];
-    const hs = rgbs.map(hueOfRgb);
-    console.log(`  ${k.padEnd(10)} 色相 ${hs.map((h) => (h === 'neutral' ? '中性' : h + '°')).join(' / ')}`);
-    for (const h of hs) if (h !== 'neutral') hues.push(h);
-  }
-
-  // 归到 60° 一档，数「彼此相隔超过 60° 的色相簇」
-  const clusters = [];
-  for (const h of hues) {
-    if (!clusters.some((c) => Math.min(Math.abs(c - h), 360 - Math.abs(c - h)) <= 60)) clusters.push(h);
-  }
-  console.log(`  → 相隔 >60° 的色相簇数量：${clusters.length}（目标 ≤ 3）`);
-  check('深色大面积色相簇 ≤ 3', clusters.length <= 3, true);
-
-  // money 必须还在暖金之外单独可辨（它是「钱」的语义色，不能和主色撞）
-  const brandH = hueOfRgb(comp(parseColor(dark['--brand']), parseColor(dark['--bg']).rgb));
-  const moneyH = hueOfRgb(comp(parseColor(dark['--money']), parseColor(dark['--bg']).rgb));
-  const gap = Math.min(Math.abs(brandH - moneyH), 360 - Math.abs(brandH - moneyH));
-  console.log(`  主色 ${brandH}° vs 工资绿 ${moneyH}°  相隔 ${gap}°`);
-  check('工资金额与主色可区分（相隔 > 60°）', gap > 60, true);
+  check('values/colors.xml 含浅色 bg', readXml('assets/android/values/colors.xml').includes(lightBg), true);
+  check('values-night/colors.xml 含深色 bg', readXml('assets/android/values-night/colors.xml').includes(darkBg), true);
 }
 
 console.log('\n' + '─'.repeat(72));

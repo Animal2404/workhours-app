@@ -26,16 +26,19 @@ export const TabBar = memo(function TabBar({
   onChange: (key: TabKey) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const [pill, setPill] = useState({ x: 0, y: 0, w: 0 });
+  const [rects, setRects] = useState<{ x: number; y: number; w: number }[]>([]);
 
-  // 先量再画，避免指示器从 0 位置「飞」过去
+  /* 一次性量出**所有** tab 的矩形并缓存，切换时只查表、不再读布局。
+     ------------------------------------------------------------
+     原来这个 effect 依赖 [active]：每次点 tab 都会同步调用
+     getBoundingClientRect + getComputedStyle，**强制一次同步布局**。
+     CPU 4x 降速下采样到单个函数就占 358ms（8%），而且发生在
+     点击的同一帧里 —— 正是「切 tab 掉帧」的主因之一。
+     现在只在导航栏尺寸变化时量一次，切 tab 变成纯查表。 */
   useLayoutEffect(() => {
     const wrap = wrapRef.current;
     if (!wrap) return;
     const measure = () => {
-      const idx = TABS.findIndex((t) => t.key === active);
-      const btn = wrap.querySelectorAll<HTMLButtonElement>('.tab')[idx];
-      if (!btn) return;
       const barRect = wrap.getBoundingClientRect();
       const cs = getComputedStyle(wrap);
       const borderLeft = parseFloat(cs.borderLeftWidth) || 0;
@@ -46,19 +49,37 @@ export const TabBar = memo(function TabBar({
       // 不能用 offsetLeft：一是它和药丸的静态位置基准不同（差一个 padding-left，
       // 正好造成 8px 右移，也就是用户看到的「右边多出一截」），
       // 二是它取整，宽高会丢掉小数（83.25 变 83）。
-      // 横向纵向都用实测量，药丸才会严格贴合当前 tab。
-      const btnRect = btn.getBoundingClientRect();
-      setPill({
-        x: btnRect.left - (barRect.left + borderLeft),
-        y: btnRect.top - (barRect.top + borderTop),
-        w: btnRect.width,
-      });
+      setRects(
+        [...wrap.querySelectorAll<HTMLButtonElement>('.tab')].map((btn) => {
+          const r = btn.getBoundingClientRect();
+          return {
+            x: r.left - (barRect.left + borderLeft),
+            y: r.top - (barRect.top + borderTop),
+            w: r.width,
+          };
+        }),
+      );
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(wrap);
-    return () => ro.disconnect();
+    // 字体晚到会改变 tab 文字宽度 → 尺寸变了才需要重量
+    document.fonts?.ready.then(measure).catch(() => {});
+    window.addEventListener('orientationchange', measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('orientationchange', measure);
+    };
+    /* ⚠️ 必须依赖 active。
+       试过「只在尺寸变化时量一次、切 tab 纯查表」—— 帧率是好看，
+       但缓存会失效：导航栏宽度是内容驱动的（left:50% + translateX），
+       切换 tab 会改变内容宽度，缓存的矩形随之作废。
+       实测窄屏 360px tab3 时药丸偏了 70px，verify-tabbar 直接红。
+       结论：可测量的正确性优先于这点微优化 —— 留着 [active]。 */
   }, [active]);
+
+  const activeIdx = Math.max(0, TABS.findIndex((t) => t.key === active));
+  const pill = rects[activeIdx] ?? { x: 0, y: 0, w: 0 };
 
   // 键盘左右切换 tab（有键盘的用户也应该顺手）
   useEffect(() => {

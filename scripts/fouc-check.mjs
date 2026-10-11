@@ -33,8 +33,8 @@ function readTokens() {
     return m[1];
   };
   return {
-    dark: grab("[data-theme='dark']", '--bg'),
-    light: grab("[data-theme='light']", '--bg'),
+    dark: grab("[data-theme='dark']", '--background'),
+    light: grab("[data-theme='light']", '--background'),
   };
 }
 

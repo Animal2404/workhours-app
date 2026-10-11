@@ -64,11 +64,17 @@ for (const f of xmlFiles) {
 console.log('\n[2] 背景色一致性（tokens.css ↔ Android 资源）');
 const tokens = await readFile(join(root, 'src', 'styles', 'tokens.css'), 'utf8');
 
-// 取 tokens.css 里浅色 :root 的 --bg
-const lightBg = tokens.match(/--bg:\s*(#[0-9a-fA-F]{6})/)?.[1]?.toUpperCase();
-// 取深色块里的 --bg
+// 取 tokens.css 里浅色 :root 的 --background
+// （token 改名过：--bg → --background（shadcn 契约），这里跟新名字；
+//   两者都对，取到哪个用哪个，避免改名时这里悄悄变 undefined 而"看起来通过"）
+const pickBg = (text) =>
+  (text.match(/--background:\s*(#[0-9a-fA-F]{6})/) ?? text.match(/--bg:\s*(#[0-9a-fA-F]{6})/))?.[1]
+    ?.toUpperCase();
+
+const lightBg = pickBg(tokens);
+// 取深色块里的 --background
 const darkSection = tokens.match(/\[data-theme='dark'\]\s*\{([\s\S]*?)\n\}/)?.[1] ?? '';
-const darkBg = darkSection.match(/--bg:\s*(#[0-9a-fA-F]{6})/)?.[1]?.toUpperCase();
+const darkBg = pickBg(darkSection);
 
 const lightXml = await readFile(join(assetsDir, 'values', 'colors.xml'), 'utf8');
 const nightXml = await readFile(join(assetsDir, 'values-night', 'colors.xml'), 'utf8');

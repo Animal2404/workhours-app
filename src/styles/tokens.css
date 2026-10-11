@@ -1,17 +1,58 @@
 /* ============================================================
-   工时记 · 设计令牌（Design Tokens）
-   圆角设计语言：大圆角卡片 / 胶囊按钮 / 柔和阴影 / 克制的层次
+   工时记 · 设计令牌
+   ============================================================
+
+   ## 方向（研究结论，改之前先读这段）
+
+   骨架直接采用 **shadcn/ui 的 token 契约**（https://ui.shadcn.com）。
+   它的核心不是组件长相，而是两条纪律：
+
+   1. **底色全无彩（chroma = 0）** —— shadcn 的 :root 里所有中性色
+      都是纯灰阶（oklch 的 C 分量全为 0），整个主题只有一个彩色
+      `--destructive`。颜色是**稀有资源**。
+   2. **一个 `--radius` 推导整套圆角** —— sm/md/lg/xl/2xl/3xl 全部由
+      `calc(var(--radius) * 倍数)` 得出，不手写一堆散值。
+
+   颜色角色分工（这是本文件最重要的约定）：
+
+   | 角色 | 用途 | 允许出现的面积 |
+   |---|---|---|
+   | `--background/--card/--muted` | 所有**大面积**底色 | 任意 |
+   | `--primary` | 强调色：按钮、选中态、进度、今日环 | **只许小面积** |
+   | `--chart-1..5` | 数据语义色（工资/加班/扣款/工时/节日） | **只许出现在数字与图表里** |
+   | `--destructive` | 删除确认 | 小面积 |
+
+   → 「大面积用中性，颜色只做点缀」是这一版 UI 的地基。
+      上一版深色模式被吐槽，根因就是拿高饱和金色去铺大面积填充。
+
+   ## 为什么不在这个项目里装 Tailwind + Radix
+
+   shadcn 的官方分发模型是「**组件是你的代码，不是依赖**」（copy-paste，
+   不进 node_modules）。本项目是 Capacitor 手机 App，包体与帧率是硬指标：
+
+   - Tailwind 只是构建期工具，但它要求把全项目 CSS 改写成 utility，
+     对 2000+ 行手写 CSS 是纯机械替换，**零视觉收益、高回归风险**；
+   - Radix 是**运行时依赖**。而且它的 Dialog 没有拖拽跟手/弹簧回弹，
+     本项目自研的 BottomSheet 手感更好 —— 换过去是**退步**。
+
+   所以：采用 shadcn 的**契约与组件 API**，用零依赖 CSS 实现，把省下的
+   运行时开销花在 60fps 上。视觉与系统性和 shadcn 对齐，手感不回退。
    ============================================================ */
 
 :root {
-  /* ---------- 圆角尺度（整套 UI 的地基） ---------- */
-  --r-xs: 10px;
-  --r-sm: 14px;
-  --r-md: 18px;
-  --r-lg: 24px;
-  --r-xl: 30px;
-  --r-2xl: 38px;
-  --r-full: 999px;
+  /* ---------- 半径：只有一个手写基准，其余推导 ---------- */
+  /* 18px 基准 × shadcn 的倍数（0.6/0.8/1/1.4/1.8/2.2）
+     = 10.8 / 14.4 / 18 / 25.2 / 32.4 / 39.6
+     与旧版的 10/14/18/24/30/38 几乎一一对应 —— 圆角观感保持不变，
+     但整套尺度从此可推导，不再是一堆散值。 */
+  --radius: 1.125rem;
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-full: 999px;
 
   /* ---------- 间距 ---------- */
   --sp-1: 4px;
@@ -23,16 +64,17 @@
   --sp-8: 32px;
   --sp-10: 40px;
 
-  /* ---------- 动效曲线（自定义曲线，不用内置的弱曲线） ---------- */
+  /* ---------- 动效 ----------
+     曲线用弹簧观感的强 ease-out；退场比进场快（exit-faster-than-enter，
+     约进场的 65%），这样关掉东西永远比打开更「利索」。 */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
-
-  /* ---------- 动效时长 ---------- */
-  --t-press: 130ms;
-  --t-fast: 180ms;
+  --t-press: 120ms;
+  --t-fast: 170ms;
   --t-base: 220ms;
-  --t-slow: 320ms;
+  --t-slow: 300ms;
+  --t-exit: 140ms; /* 退场：约进场的 65% */
 
   /* ---------- 字体 ---------- */
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI',
@@ -46,162 +88,192 @@
 }
 
 /* ============================================================
-   浅色主题（默认）
+   浅色主题
+   ------------------------------------------------------------
+   中性阶取自 Tailwind neutral（shadcn 用的就是这套）。
    ============================================================ */
 :root,
 [data-theme='light'] {
   color-scheme: light;
 
-  --bg: #f4f4f7;
-  --bg-deep: #ebebf0;
-  --surface: #ffffff;
-  --surface-2: #fafafc;
-  --surface-sunken: #f0f0f4;
+  /* ---- shadcn 契约（同名 token，深浅各一套） ---- */
+  --background: #fafafa;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
 
-  --text: #101014;
-  --text-2: #5c5c6b;
-  --text-3: #91919f;
+  /* 单一强调色：深墨绿。语义上就是「钱」，也是全 App 唯一的彩色。 */
+  --primary: #047857;
+  --primary-foreground: #ffffff;
 
-  --line: rgba(16, 16, 20, 0.08);
-  --line-strong: rgba(16, 16, 20, 0.14);
+  --secondary: #f5f5f5;
+  --secondary-foreground: #262626;
+  --muted: #f5f5f5;
+  --muted-foreground: #6b6b6b;
+  /* 契约扩展：比 muted-foreground 再弱一档的说明文字。
+     shadcn 只有一档 muted，但本 App 有「主/次/弱」三级文字层次需要。 */
+  --subtle-foreground: #909090;
+  --accent: #ecfdf5; /* 极淡的强调色底：选中行、达标格 */
+  --accent-foreground: #065f46;
 
-  /* 主色：电光紫罗兰 → 蓝，钱与工时的视觉锚点。
-     ⚠️ 渐变末端不能用 #4f8dff：白字在它上面只有 3.19:1，达不到 AA 4.5:1。
-     #3d6fdd 是 4.65:1，视觉上只是「深了一点点」，但小字终于合规了。 */
-  --brand: #6d5efc;
-  --brand-2: #3d6fdd;
-  --brand-soft: rgba(109, 94, 252, 0.1);
-  --brand-soft-2: rgba(109, 94, 252, 0.18);
-  --on-brand: #ffffff;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
 
-  /* 语义色。同样受对比度约束：
-     --money #10b981 在白底上只有 2.54:1（工资数字根本看不清），
-     换成 #047857 = 5.48:1；--holiday 也从 4.19 提到 5.21。 */
-  --money: #047857; /* 工资 / 正收益 */
-  --money-2: #34d399; /* 渐变的另一端（进度条 / 14 天柱） */
-  --money-soft: rgba(4, 120, 87, 0.12);
-  --warn: #b45309; /* 加班 */
-  --warn-soft: rgba(180, 83, 9, 0.12);
-  --danger: #dc2626; /* 扣款 */
-  --danger-soft: rgba(220, 38, 38, 0.11);
-  /* 节日名。单开一个 token 而不是复用 danger/warn：
-     颜色看着都能用，但语义完全不同，混用以后没人敢改。 */
-  --holiday: #c53a35;
-  --holiday-soft: rgba(197, 58, 53, 0.11);
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: rgba(4, 120, 87, 0.45);
 
-  /* 材质（毛玻璃） */
-  --material: rgba(255, 255, 255, 0.72);
-  --material-strong: rgba(255, 255, 255, 0.86);
+  /* ---- 数据语义色：只许出现在数字与图表里 ---- */
+  --chart-1: #047857; /* 工资 / 实得 */
+  --chart-2: #b45309; /* 加班 */
+  --chart-3: #be123c; /* 扣款 */
+  --chart-4: #475569; /* 工时 */
+  --chart-5: #9a3412; /* 节日 */
+
+  /* ---- 材质与阴影 ---- */
+  --material: rgba(255, 255, 255, 0.78);
+  --material-strong: rgba(255, 255, 255, 0.92);
   --material-blur: saturate(180%) blur(20px);
-  --scrim: rgba(16, 16, 20, 0.32);
+  --scrim: rgba(23, 23, 23, 0.32);
 
-  /* 阴影：多层柔和，不脏 */
-  --shadow-sm: 0 1px 2px rgba(16, 16, 20, 0.06), 0 1px 1px rgba(16, 16, 20, 0.04);
-  --shadow-md: 0 4px 14px rgba(16, 16, 20, 0.07), 0 1px 3px rgba(16, 16, 20, 0.05);
-  --shadow-lg: 0 16px 40px rgba(16, 16, 20, 0.11), 0 4px 12px rgba(16, 16, 20, 0.06);
-  --shadow-sheet: 0 -12px 48px rgba(16, 16, 20, 0.16);
+  --shadow-sm: 0 1px 2px rgba(23, 23, 23, 0.06), 0 1px 1px rgba(23, 23, 23, 0.04);
+  --shadow-md: 0 4px 14px rgba(23, 23, 23, 0.07), 0 1px 3px rgba(23, 23, 23, 0.05);
+  --shadow-lg: 0 16px 40px rgba(23, 23, 23, 0.11), 0 4px 12px rgba(23, 23, 23, 0.06);
+  --shadow-sheet: 0 -12px 48px rgba(23, 23, 23, 0.16);
 
-  /* 英雄卡（本月已赚）：浅色下保留品牌渐变，与深色共用同一组变量 */
-  --hero-bg: linear-gradient(135deg, #6d5efc 0%, #3d6fdd 100%);
-  --hero-fg: #ffffff;
-  --hero-line: rgba(255, 255, 255, 0.24);
-  --hero-glow: rgba(255, 255, 255, 0.3);
-  --hero-accent: #ffffff;
-  /* 英雄卡上的「累计」药丸与环比徽标。
-     浅色卡是深色渐变 → 药丸要用**更深的叠加**才叫「抬升」；
-     深色卡是深色面 → 药丸要用更亮的叠加。两边方向相反，所以必须是两个 token。 */
-  --hero-pill: rgba(12, 12, 24, 0.18);
-  --hero-up: #d9ffe9;
-  --hero-down: #ffe2e2;
+  /* ---- 主数字卡：中性墨色卡（shadcn 式，不用彩色铺底） ---- */
+  --hero-bg: linear-gradient(160deg, #1f1f1f 0%, #141414 100%);
+  --hero-fg: #fafafa;
+  --hero-muted: #a3a3a3;
+  --hero-line: rgba(255, 255, 255, 0.12);
+  --hero-glow: rgba(4, 120, 87, 0.12);
+  --hero-accent: #34d399;
+  --hero-pill: rgba(255, 255, 255, 0.08);
+  --hero-up: #6ee7b7;
+  --hero-down: #fca5a5;
 
-  /* 日历「工时拉满」 */
-  --day-full-bg: linear-gradient(140deg, #6d5efc 0%, #4f8dff 100%);
-  --day-full-fg: #ffffff;
-  --day-full-shadow: 0 6px 14px -6px rgba(109, 94, 252, 0.38);
-
-  --ring: rgba(109, 94, 252, 0.35);
+  /* ---- 日历「达标」：淡色底 + 强调色文字，不做整格高饱和填充 ---- */
+  --day-full-bg: var(--accent);
+  --day-full-fg: var(--accent-foreground);
+  --day-full-shadow: none;
 }
 
 /* ============================================================
    深色主题
    ------------------------------------------------------------
-   原则（来自 color-dark-mode：深色用「降饱和的色调变体」，不是把浅色反过来）：
-   1. 面是**中性石墨**，不带棕、不带蓝紫偏 —— 大面积底色一偏色就显脏
-   2. 暖金只做**精确点缀**（选中态、今日环、关键数字），不做大面积填充
-   3. 全屏只留**一个**色彩家族：暖金 + 中性。绿/红只在「钱的数字」上出现
-   4. 深色下的对比度单独测过，不是把浅色的值照搬
+   同样是无彩中性阶（Tailwind neutral 深色段）。
+   大面积中性，强调色只做小面积点缀。
    ============================================================ */
 [data-theme='dark'] {
   color-scheme: dark;
 
-  /* 中性石墨，底色不带任何色相偏移 */
-  --bg: #0f0f11;
-  --bg-deep: #09090a;
-  --surface: #17171a;
-  --surface-2: #1d1d21;
-  --surface-sunken: #131316;
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #141414;
+  --card-foreground: #fafafa;
+  --popover: #171717;
+  --popover-foreground: #fafafa;
 
-  --text: #f2f2f4;
-  --text-2: #a3a3ac;
-  --text-3: #6e6e78;
+  /* 深色下强调色提亮一档，保证按钮上的深色文字有对比度 */
+  --primary: #10b981;
+  --primary-foreground: #04150f;
 
-  --line: rgba(255, 255, 255, 0.075);
-  --line-strong: rgba(255, 255, 255, 0.13);
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+  --muted: #1f1f1f;
+  --muted-foreground: #a3a3a3;
+  --subtle-foreground: #6f6f6f;
+  --accent: #0c2a22; /* 深色下的强调色底：很暗的墨绿，不发光 */
+  --accent-foreground: #6ee7b7;
 
-  /* 主色：暖金，但**降饱和**（浅色是 #6d5efc 那种高饱和，深色不能照搬）
-     用途收窄到：选中态、今日描边、进度、关键数字。不做卡片底色。 */
-  --brand: #c9a24a;
-  --brand-2: #a8813a;
-  --brand-soft: rgba(201, 162, 74, 0.12);
-  --brand-soft-2: rgba(201, 162, 74, 0.2);
-  --on-brand: #17130a;
+  --destructive: #f87171;
+  --destructive-foreground: #1a0505;
 
-  /* 语义色：整体降饱和，避免在暗底上「发光」。
-     绿只在「钱」的数字上用，不进英雄卡 —— 一张卡里塞三种色相是最伤的。 */
-  --money: #5fbf8d;
-  --money-2: #3f9c72; /* 深色下渐变末端也要降饱和，不能沿用浅色的亮薄荷 */
-  --money-soft: rgba(95, 191, 141, 0.13);
-  --warn: #cf8352;
-  --warn-soft: rgba(207, 131, 82, 0.15);
-  --danger: #d2706e;
-  --danger-soft: rgba(210, 112, 110, 0.14);
-  /* 节日名：暖玫瑰，和暖金同属暖色家族，不引入第二种对立色相 */
-  --holiday: #cf8f7e;
-  --holiday-soft: rgba(207, 143, 126, 0.14);
+  --border: rgba(255, 255, 255, 0.09);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: rgba(16, 185, 129, 0.5);
 
-  --material: rgba(23, 23, 26, 0.78);
-  --material-strong: rgba(23, 23, 26, 0.93);
+  /* 数据语义色：深色下统一降饱和，避免暗底上发光 */
+  --chart-1: #34d399;
+  --chart-2: #d69a5c;
+  --chart-3: #f08a8a;
+  --chart-4: #94a3b8;
+  --chart-5: #d08a6a;
+
+  --material: rgba(20, 20, 20, 0.8);
+  --material-strong: rgba(20, 20, 20, 0.94);
   --material-blur: saturate(150%) blur(22px);
-  --scrim: rgba(0, 0, 0, 0.6);
-
-  /* 英雄卡：干净的**抬升中性面**，取代原来夹棕的 #272119
-     （棕调在纯石墨背景上会显脏，像浅色卡调暗了而不是深色卡） */
-  --hero-bg: linear-gradient(158deg, #1e1e22 0%, #1a1a1e 62%, #171719 100%);
-  --hero-fg: #f2f2f4;
-  --hero-line: rgba(255, 255, 255, 0.09);
-  --hero-glow: rgba(201, 162, 74, 0.1); /* 极淡，只给方向感，不铺色 */
-  --hero-accent: #d9b46a;
-
-  /* 英雄卡上的药丸/徽标：
-     原来用 rgba(255,255,255,0.14) 白色叠加 —— 在中性面上会糊成「灰泥」，
-     看着像禁用态。改成更淡的白 + 明确描边，读起来才是「可点的第二层」。 */
-  --hero-pill: rgba(255, 255, 255, 0.055);
-  --hero-up: #e0c68a; /* 涨幅：香槟金，和主色同族 */
-  --hero-down: #d99e94; /* 跌幅：暖玫瑰，仍是同一家族 */
-
-  /* 日历「达标」：低饱和暖褐。
-     原来 #6f5527 是中饱和橄榄金，一行 7 个格子连成一大块，
-     比英雄卡还抢眼 —— 深色下大面积高饱和就是这么来的。 */
-  --day-full-bg: linear-gradient(140deg, #3d3323 0%, #2e2719 100%);
-  --day-full-fg: #e6d3a4;
-  --day-full-shadow: none;
+  --scrim: rgba(0, 0, 0, 0.62);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 18px 44px rgba(0, 0, 0, 0.6);
   --shadow-sheet: 0 -12px 48px rgba(0, 0, 0, 0.65);
 
-  --ring: rgba(201, 162, 74, 0.5);
+  /* 主数字卡：抬升一档的中性面 + 极淡强调色辉光 */
+  --hero-bg: linear-gradient(160deg, #1c1c1c 0%, #131313 100%);
+  --hero-fg: #fafafa;
+  --hero-muted: #a3a3a3;
+  --hero-line: rgba(255, 255, 255, 0.1);
+  --hero-glow: rgba(16, 185, 129, 0.09);
+  --hero-accent: #34d399;
+  --hero-pill: rgba(255, 255, 255, 0.06);
+  --hero-up: #6ee7b7;
+  --hero-down: #fca5a5;
+
+  --day-full-bg: var(--accent);
+  --day-full-fg: var(--accent-foreground);
+  --day-full-shadow: none;
+}
+
+/* ============================================================
+   兼容别名：旧 token 名 → 新契约
+   ------------------------------------------------------------
+   app.css / 页面里还有大量旧名字。一次性全改风险太大，
+   这里做一层映射：视觉立刻切到新体系，组件再逐个迁移到新名字。
+   迁移完成后这一层可以删掉。
+   ============================================================ */
+:root,
+[data-theme='light'],
+[data-theme='dark'] {
+  --bg: var(--background);
+  --bg-deep: var(--muted);
+  --surface: var(--card);
+  --surface-2: var(--secondary);
+  --surface-sunken: var(--muted);
+
+  --text: var(--foreground);
+  --text-2: var(--muted-foreground);
+  --text-3: var(--subtle-foreground);
+
+  --line: var(--border);
+  --line-strong: var(--border);
+
+  --brand: var(--primary);
+  --brand-2: var(--primary);
+  --brand-soft: var(--accent);
+  --brand-soft-2: var(--accent);
+  --on-brand: var(--primary-foreground);
+
+  --money: var(--chart-1);
+  --money-2: var(--chart-1);
+  --money-soft: var(--accent);
+  --warn: var(--chart-2);
+  --warn-soft: var(--accent);
+  --danger: var(--chart-3);
+  --danger-soft: var(--accent);
+  --holiday: var(--chart-5);
+  --holiday-soft: var(--accent);
+
+  --r-xs: var(--radius-sm);
+  --r-sm: var(--radius-md);
+  --r-md: var(--radius-lg);
+  --r-lg: var(--radius-xl);
+  --r-xl: var(--radius-2xl);
+  --r-2xl: var(--radius-3xl);
+  --r-full: var(--radius-full);
 }
 
 /* ============================================================
@@ -227,13 +299,12 @@ body {
   font-family: var(--font-sans);
   font-size: 16px;
   line-height: 1.5;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--background);
+  color: var(--foreground);
   overscroll-behavior-y: none;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* 深色/浅色切换要缓，不要突然闪一下 */
-  transition: background-color 260ms ease, color 260ms ease;
+  transition: background-color var(--t-slow) ease, color var(--t-slow) ease;
 }
 
 #root {
@@ -274,7 +345,7 @@ ol {
 }
 
 a {
-  color: var(--brand);
+  color: var(--primary);
   text-decoration: none;
 }
 
@@ -284,9 +355,9 @@ svg {
 }
 
 :focus-visible {
-  outline: 2.5px solid var(--ring);
+  outline: 2.5px solid var(--primary);
   outline-offset: 2px;
-  border-radius: var(--r-sm);
+  border-radius: var(--radius-sm);
 }
 
 /* 数字一律等宽，金额与时长不会跳动 */
@@ -317,8 +388,8 @@ svg {
     --material-blur: none;
   }
   [data-theme='dark'] {
-    --material: rgba(23, 23, 29, 0.98);
-    --material-strong: #17171d;
+    --material: rgba(20, 20, 20, 0.98);
+    --material-strong: #141414;
     --material-blur: none;
   }
 }
@@ -326,15 +397,11 @@ svg {
 /* 无障碍：高对比度偏好 —— 边界画清楚 */
 @media (prefers-contrast: more) {
   :root {
-    --line: rgba(16, 16, 20, 0.3);
-    --line-strong: rgba(16, 16, 20, 0.5);
-    --text-2: #3d3d4a;
-    --text-3: #55555f;
+    --border: rgba(23, 23, 23, 0.32);
+    --muted-foreground: #4a4a4a;
   }
   [data-theme='dark'] {
-    --line: rgba(255, 255, 255, 0.32);
-    --line-strong: rgba(255, 255, 255, 0.55);
-    --text-2: #d0d0d8;
-    --text-3: #a8a8b4;
+    --border: rgba(255, 255, 255, 0.34);
+    --muted-foreground: #d4d4d4;
   }
 }

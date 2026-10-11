@@ -66,6 +66,13 @@ jobs:
       - name: 主题配色自检（对比度 + 色相纪律 + 首帧底色一致性）
         run: npm run check:theme
 
+      # 帧率：**只报告，不拦构建**。
+      # 共享 runner 上 rAF 节奏抖动大，同一场景两次能差一倍；
+      # 拿它当门会变成随机红。数字仍然打印出来，便于人工比对趋势。
+      - name: 帧率报告（不拦构建）
+        run: npm run check:fps
+        continue-on-error: true
+
       - name: 节假日数据自检
         run: npm run check:holidays
 
