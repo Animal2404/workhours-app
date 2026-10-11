@@ -1603,7 +1603,7 @@
      重新模糊一遍（393×~100 @3x ≈ 1179×300 物理像素，还带 saturate）。
      实测：切 tab p95 33ms / 长任务最长 294ms；去掉后显著下降。
      用高不透明度的实色近似 —— 视觉几乎一样，代价差一个数量级。 */
-  background: var(--material-strong);
+  background: var(--surface-solid);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-lg);
 }
@@ -1684,8 +1684,9 @@
   gap: var(--sp-2);
   padding: 11px 18px;
   border-radius: var(--r-full);
-  background: var(--material-strong);
-  /* 底已经是 0.94 不透明，磨砂几乎看不出来却要每帧重算 —— 去掉 */
+  background: var(--surface-solid);
+  /* 底已经接近不透明，磨砂看不出来却要每帧重算 —— 去掉；
+     但必须换成完全不透明，否则没有模糊时背后内容会透出来 */
   border: 1px solid var(--line);
   box-shadow: var(--shadow-lg);
   font-size: 13.5px;
