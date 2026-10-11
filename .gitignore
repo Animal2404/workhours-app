@@ -46,3 +46,7 @@ npm-debug.log*
 out/
 coverage/
 *.tsbuildinfo
+
+# 提交信息草稿：提交后会被删掉，不该入库
+# （曾经踩过：git add -A 把它一起提交了，删掉后留下一条游离的 D 记录）
+.commit-msg*.txt
